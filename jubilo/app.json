@@ -4,7 +4,7 @@
     "slug": "jubilo",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/adaptive-icon.png",
     "scheme": "jubilo",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
