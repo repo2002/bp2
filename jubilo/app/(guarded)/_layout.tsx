@@ -9,6 +9,9 @@ export default function GuardedLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="(stack)/chat" />
+      <Stack.Screen name="(stack)/profile" />
+      <Stack.Screen name="(stack)/notifications" />
     </Stack>
   );
 }

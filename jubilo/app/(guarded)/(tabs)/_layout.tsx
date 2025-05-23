@@ -3,20 +3,37 @@ import { useTheme } from "@/hooks/useTheme";
 import { Ionicons } from "@expo/vector-icons";
 import { TouchableOpacity, View } from "react-native";
 import ThemeText from "@/components/ThemeText";
+import { useUser } from "@clerk/clerk-expo";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Image } from "expo-image";
 
 export default function TabsLayout() {
   const theme = useTheme();
-
+  const { user } = useUser();
+  const convexUser = useQuery(api.profile.getUserByClerkId, {
+    clerkId: user?.id || "",
+  });
+  if (!convexUser) return null;
+  const username = convexUser.displayUsername;
+  const imageUrl = convexUser.imageUrl;
   return (
     <Tabs
       screenOptions={{
         headerShown: true,
         tabBarStyle: {
           backgroundColor: theme.colors.background,
+          paddingBottom: 0,
+          marginBottom: 0,
+          paddingTop: 4,
+          height: 70,
         },
+        // tabBarShowLabel: false,
         tabBarActiveTintColor: theme.colors.primary,
         headerStyle: {
           backgroundColor: theme.colors.background,
+          borderBottomWidth: 0.3,
+          borderBottomColor: theme.colors.grey,
         },
         headerTitleStyle: {
           color: theme.colors.text,
@@ -37,9 +54,17 @@ export default function TabsLayout() {
                 marginLeft: 16,
               }}
             >
-              <TouchableOpacity onPress={() => router.push("/profile")}>
+              <TouchableOpacity
+                onPress={() => router.push("/profile")}
+                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              >
+                <Image
+                  source={{ uri: imageUrl }}
+                  style={{ width: 30, height: 30, borderRadius: 15 }}
+                />
+
                 <ThemeText style={{ fontSize: 18, fontWeight: "bold" }}>
-                  @username
+                  {username}
                 </ThemeText>
               </TouchableOpacity>
             </View>

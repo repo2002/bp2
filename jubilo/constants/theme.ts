@@ -15,7 +15,10 @@ export interface Theme {
       greyDark: string;
       greyDarkest: string;
       greyLightest: string;
-      
+      success: string;
+      warning: string;
+      info: string;
+      cardBackground: string;
     };
     dark: {
       primary: string;
@@ -32,9 +35,14 @@ export interface Theme {
       greyDark: string;
       greyDarkest: string;
       greyLightest: string;
+      success: string;
+      warning: string;
+      info: string;
+      cardBackground: string;
+    };
   };
 }
-};
+
 
 export const theme: Theme = {
   colors: {
@@ -53,6 +61,10 @@ export const theme: Theme = {
       greyDark: "#A9A9A9",
       greyDarkest: "#696969",
       greyLightest: "#F5F5F5",
+      success: "#00FF00",
+      warning: "#FFFF00",
+      info: "#0000FF",
+      cardBackground: "#e8e3e3",
     },
     dark: {
       primary: "#0A84FF",
@@ -69,6 +81,10 @@ export const theme: Theme = {
       greyDark: "#999999",
       greyDarkest: "#7A7A7A",
       greyLightest: "#E0E0E0",
+      success: "#00FF00",
+      warning: "#FFFF00",
+      info: "#0000FF",
+      cardBackground: "#10112e",
     },
   },
 }; 

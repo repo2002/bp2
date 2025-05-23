@@ -8,6 +8,7 @@ export default defineSchema({
     email: v.string(),
     imageUrl: v.optional(v.string()),
     username: v.string(),
+    displayUsername: v.optional(v.string()),
     firstname: v.string(),
     lastname: v.string(),
     dateOfBirth: v.optional(v.number()),
@@ -175,6 +176,8 @@ export default defineSchema({
     groupUpdatedAt: v.optional(v.number()),
     groupCreatedBy: v.id("users"),
     combinedMemberKey: v.optional(v.string()),
+    isPrivate: v.optional(v.boolean()),
+    isArchived: v.optional(v.boolean()),
     unreadCounts: v.optional(v.array(v.object({
       userId: v.id("users"),
       count: v.number()
@@ -225,7 +228,50 @@ export default defineSchema({
       v.literal("reaction"),
       v.literal("gif")
     ),
-    metadata: v.optional(v.any()),
+    metadata: v.optional(
+      v.union(
+        v.object({
+          type: v.literal("poll"),
+          question: v.string(),
+          options: v.array(
+            v.object({
+              id: v.string(),
+              text: v.string(),
+              votes: v.number(),
+              voters: v.array(v.id("users")),
+            })
+          ),
+          totalVotes: v.number(),
+          endTime: v.optional(v.number()),
+          isMultipleChoice: v.optional(v.boolean()),
+          isAnonymous: v.optional(v.boolean()),
+        }),
+        v.object({
+          type: v.literal("todo"),
+          title: v.string(),
+          items: v.array(
+            v.object({
+              id: v.string(),
+              text: v.string(),
+              completed: v.boolean(),
+              completedBy: v.optional(v.id("users")),
+              completedAt: v.optional(v.number()),
+            })
+          ),
+          completedCount: v.number(),
+          totalCount: v.number(),
+          dueDate: v.optional(v.number()),
+          assignees: v.optional(v.array(v.id("users"))),
+        }),
+        v.object({
+          type: v.literal("location"),
+          latitude: v.number(),
+          longitude: v.number(),
+          name: v.optional(v.string()),
+        }),
+        v.any() // For other message types
+      )
+    ),
     messageTime: v.number(),
     messageId: v.string(),
     replyToId: v.optional(v.string()),

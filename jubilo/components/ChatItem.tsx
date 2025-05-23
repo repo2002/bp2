@@ -47,8 +47,18 @@ export const ChatItem = ({ chat, currentUserId }: ChatItemProps) => {
   const getLastMessagePreview = () => {
     if (!chat.lastMessage) return "No messages yet";
 
-    const prefix = chat.lastMessageSender === currentUserId ? "You: " : "";
-    return prefix + chat.lastMessage;
+    if (chat.isGroup) {
+      // For group chats, show sender name (unless it's you) + message
+      const prefix =
+        chat.lastMessageSender === currentUserId
+          ? "You: "
+          : `${chat.lastMessageSender}: `;
+      return prefix + chat.lastMessage;
+    } else {
+      // For 1-1 chats, only show "You: " prefix if you sent it
+      const prefix = chat.lastMessageSender === currentUserId ? "You: " : "";
+      return prefix + chat.lastMessage;
+    }
   };
 
   const getTimeAgo = (timestamp?: number) => {
@@ -83,7 +93,13 @@ export const ChatItem = ({ chat, currentUserId }: ChatItemProps) => {
 
   return (
     <TouchableOpacity
-      onPress={() => router.push(`/chat/${chat._id}`)}
+      //onPress={() => router.push(`/chat/${chat._id}`)}
+      onPress={() =>
+        router.push({
+          pathname: "/chat/[id]",
+          params: { id: chat._id, name: chat.name },
+        })
+      }
       style={{
         flexDirection: "row",
         paddingHorizontal: 16,
@@ -136,7 +152,7 @@ export const ChatItem = ({ chat, currentUserId }: ChatItemProps) => {
         >
           <ThemeText
             style={{
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: "600",
             }}
           >
@@ -173,7 +189,7 @@ export const ChatItem = ({ chat, currentUserId }: ChatItemProps) => {
           {unreadCount > 0 && (
             <View
               style={{
-                backgroundColor: theme.colors.error,
+                backgroundColor: theme.colors.primary,
                 borderRadius: 12,
                 minWidth: 24,
                 height: 24,
@@ -184,8 +200,8 @@ export const ChatItem = ({ chat, currentUserId }: ChatItemProps) => {
               }}
             >
               <ThemeText
+                color="white"
                 style={{
-                  color: "white",
                   fontSize: 12,
                   fontWeight: "600",
                 }}
