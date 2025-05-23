@@ -139,6 +139,7 @@ export const updateUser = internalMutation({
     await ctx.db.patch(userId, {
       ...fields,
       name: `${fields.firstname} ${fields.lastname}`,
+      updatedAt: Date.now(),
     });
   },
 });

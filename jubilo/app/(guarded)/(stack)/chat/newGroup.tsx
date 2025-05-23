@@ -8,15 +8,18 @@ import {
   TextInput,
   SafeAreaView,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useTheme } from "@/hooks/useTheme";
 import ThemeText from "@/components/ThemeText";
 import { Ionicons } from "@expo/vector-icons";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@clerk/clerk-expo";
+import Loading from "@/components/Loader";
+import * as ImagePicker from "expo-image-picker";
 
 interface User {
   _id: Id<"users">;
@@ -29,13 +32,18 @@ export default function NewGroup() {
   const theme = useTheme();
   const router = useRouter();
   const { userId } = useAuth();
-  const { searchQuery } = useLocalSearchParams<{ searchQuery: string }>();
+  const { searchQuery } = useLocalSearchParams();
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
   const [groupName, setGroupName] = useState("");
+  const [groupDescription, setGroupDescription] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [groupImage, setGroupImage] = useState<string | null>(null);
 
-  const users = useQuery(api.users.list, {
-    search: searchQuery,
+  // Get users list with search
+  const users = useQuery(api.profile.list, {
+    search: searchQuery as string,
   });
+  const createChat = useMutation(api.chats.createChat);
 
   const handleUserSelect = (user: User) => {
     setSelectedUsers((prev) =>
@@ -45,10 +53,37 @@ export default function NewGroup() {
     );
   };
 
-  const handleCreateGroup = () => {
+  const handleCreateGroup = async () => {
     if (groupName.trim() && selectedUsers.length >= 2) {
-      // TODO: Create group chat
-      router.back();
+      try {
+        setIsCreating(true);
+        const chatId = await createChat({
+          members: selectedUsers.map((u) => u._id),
+          isGroup: true,
+          groupName: groupName.trim(),
+          groupDescription: groupDescription.trim(),
+        });
+        router.replace({
+          pathname: "/chat/[id]",
+          params: { id: chatId, name: groupName.trim() },
+        });
+      } catch (error) {
+        console.error("Error creating group:", error);
+        // TODO: Show error message
+      } finally {
+        setIsCreating(false);
+      }
+    }
+  };
+
+  const pickImageAsync = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setGroupImage(result.assets[0].uri);
     }
   };
 
@@ -62,7 +97,7 @@ export default function NewGroup() {
           {
             backgroundColor: isSelected
               ? theme.colors.primary + "20"
-              : theme.colors.background,
+              : theme.colors.cardBackground,
           },
         ]}
         onPress={() => handleUserSelect(user)}
@@ -88,20 +123,62 @@ export default function NewGroup() {
   return (
     <SafeAreaView style={[styles.container]}>
       <ScrollView style={styles.content}>
+        {/* Group Info */}
         <View style={styles.groupInfo}>
-          <TextInput
-            style={[
-              styles.groupNameInput,
-              {
-                borderColor: theme.colors.greyLight,
-                color: theme.colors.text,
-              },
-            ]}
-            placeholder="Group name"
-            placeholderTextColor={theme.colors.grey}
-            value={groupName}
-            onChangeText={setGroupName}
-          />
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 16,
+              padding: 16,
+              backgroundColor: theme.colors.cardBackground,
+              borderRadius: 10,
+            }}
+          >
+            {groupImage && (
+              <Pressable onPress={pickImageAsync}>
+                <Image
+                  source={{ uri: groupImage }}
+                  style={{ width: 50, height: 50, borderRadius: 25 }}
+                  resizeMode="cover"
+                />
+              </Pressable>
+            )}
+            <View
+              style={{
+                flexDirection: "column",
+                gap: 4,
+              }}
+            >
+              <TextInput
+                style={[
+                  {
+                    color: theme.colors.text,
+                    fontSize: 20,
+                    fontWeight: "500",
+                  },
+                ]}
+                placeholder="Group name"
+                placeholderTextColor={theme.colors.grey}
+                value={groupName}
+                onChangeText={setGroupName}
+              />
+              <TextInput
+                style={[
+                  {
+                    color: theme.colors.text,
+                    fontSize: 16,
+                    fontWeight: "500",
+                  },
+                ]}
+                placeholder="Group description (optional)"
+                placeholderTextColor={theme.colors.grey}
+                value={groupDescription}
+                onChangeText={setGroupDescription}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+          </View>
 
           {selectedUsers.length > 0 && (
             <View style={styles.selectedUsers}>
@@ -132,14 +209,28 @@ export default function NewGroup() {
           )}
         </View>
 
-        <FlatList
-          data={users}
-          renderItem={renderUser}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.userList}
-        />
+        {/* User List */}
+        {users === undefined ? (
+          <Loading />
+        ) : (
+          <FlatList
+            data={users}
+            renderItem={renderUser}
+            keyExtractor={(item) => item._id}
+            contentContainerStyle={styles.userList}
+            ListEmptyComponent={() => (
+              <View style={styles.emptyState}>
+                <ThemeText style={{ color: theme.colors.grey }}>
+                  No users found
+                </ThemeText>
+              </View>
+            )}
+            scrollEnabled={false}
+          />
+        )}
       </ScrollView>
 
+      {/* Create Button */}
       {selectedUsers.length >= 2 && groupName.trim() && (
         <Pressable
           style={[
@@ -147,9 +238,22 @@ export default function NewGroup() {
             { backgroundColor: theme.colors.primary },
           ]}
           onPress={handleCreateGroup}
+          disabled={isCreating}
         >
-          <ThemeText style={styles.createButtonText}>Create Group</ThemeText>
+          {isCreating ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <ThemeText style={styles.createButtonText}>Create Group</ThemeText>
+          )}
         </Pressable>
+      )}
+
+      {/* Loading Overlay */}
+      {isCreating && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <ThemeText style={{ marginTop: 12 }}>Creating group...</ThemeText>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -166,12 +270,11 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 16,
   },
-  groupNameInput: {
-    height: 40,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    fontSize: 16,
+
+  descriptionInput: {
+    height: 80,
+    textAlignVertical: "top",
+    paddingTop: 8,
   },
   selectedUsers: {
     gap: 8,
@@ -232,5 +335,15 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontWeight: "600",
+  },
+  emptyState: {
+    padding: 32,
+    alignItems: "center",
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

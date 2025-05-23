@@ -4,12 +4,25 @@ import ThemeText from "@/components/ThemeText";
 import { TouchableOpacity } from "react-native";
 import { View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 export default function ChatLayout() {
   const theme = useTheme();
   const { id, name } = useLocalSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
+  const chats = useQuery(api.chats.getUserChats);
+
+  const handleSearch = useCallback(
+    (event: { nativeEvent: { text: string } }) => {
+      const query = event.nativeEvent.text;
+      setSearchQuery(query);
+      // Update URL params to trigger re-render in child components
+      router.setParams({ searchQuery: query });
+    },
+    []
+  );
 
   return (
     <Stack
@@ -29,8 +42,10 @@ export default function ChatLayout() {
       <Stack.Screen
         name="index"
         options={{
+          title: "Chats",
           headerSearchBarOptions: {
             placeholder: "Search chats",
+            onChangeText: handleSearch,
           },
           headerTitle: () => (
             <View
@@ -68,6 +83,7 @@ export default function ChatLayout() {
         name="[id]"
         options={{
           headerShown: true,
+          title: name as string,
         }}
       />
       <Stack.Screen
@@ -81,12 +97,9 @@ export default function ChatLayout() {
         name="new"
         options={{
           title: "New Chat",
-          presentation: "modal",
           headerSearchBarOptions: {
             placeholder: "Search users",
-            onChangeText: (event) => {
-              setSearchQuery(event.nativeEvent.text);
-            },
+            onChangeText: handleSearch,
           },
           headerRight: () => (
             <TouchableOpacity onPress={() => router.back()}>
@@ -101,11 +114,8 @@ export default function ChatLayout() {
           title: "New Group",
           headerSearchBarOptions: {
             placeholder: "Search users",
-            onChangeText: (event) => {
-              setSearchQuery(event.nativeEvent.text);
-            },
+            onChangeText: handleSearch,
           },
-          presentation: "modal",
           headerRight: () => (
             <TouchableOpacity onPress={() => router.back()}>
               <Ionicons name="close" size={24} color={theme.colors.text} />
