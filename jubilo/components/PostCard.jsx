@@ -3,7 +3,7 @@ import { getShortContent, timeAgo } from "@/helpers/common";
 import { useTheme } from "@/hooks/theme";
 import { getPostLikes, likePost, unlikePost } from "@/services/postService";
 import { Ionicons } from "@expo/vector-icons";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Animated,
@@ -23,11 +23,12 @@ const SUPABASE_STORAGE_URL =
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
 const PostCard = memo(
-  ({ post, user, onCommentPress, onSharePress, onLikePress }) => {
+  ({ post, user, commentId, onCommentPress, onSharePress, onLikePress }) => {
     const theme = useTheme();
     const images = Array.isArray(post.images) ? post.images : [];
     const comments = Array.isArray(post.comments) ? post.comments : [];
     const commentsCount = comments.length;
+    const commentsListRef = useRef(null);
     const lastComment = commentsCount > 0 ? comments[commentsCount - 1] : null;
     const [likeCount, setLikeCount] = useState(post.like_count || 0);
     const [likedByUser, setLikedByUser] = useState(false);
@@ -91,6 +92,17 @@ const PostCard = memo(
         mounted = false;
       };
     }, [post.id, user?.id]);
+
+    useEffect(() => {
+      if (commentId && comments.length > 0) {
+        const index = comments.findIndex((c) => c.id === commentId);
+        if (index !== -1 && commentsListRef.current) {
+          setTimeout(() => {
+            commentsListRef.current.scrollToIndex({ index, animated: true });
+          }, 100);
+        }
+      }
+    }, [commentId, comments]);
 
     const handleLike = useCallback(async () => {
       if (!user?.id || likeLoading) return;
@@ -376,18 +388,16 @@ const PostCard = memo(
         </View>
 
         {/* Comments Preview */}
-        {commentsCount > 0 && (
+        {commentsCount > 0 && lastComment && (
           <View style={styles.commentsPreview}>
-            {lastComment && (
-              <View style={styles.lastComment}>
-                <ThemeText style={styles.commentUsername}>
-                  {lastComment.user?.username}
-                </ThemeText>
-                <ThemeText style={styles.commentText}>
-                  {getShortContent(lastComment.content, 30)}
-                </ThemeText>
-              </View>
-            )}
+            <View style={styles.lastComment}>
+              <ThemeText style={styles.commentUsername}>
+                {lastComment.user?.username}
+              </ThemeText>
+              <ThemeText style={styles.commentText}>
+                {getShortContent(lastComment.content, 30)}
+              </ThemeText>
+            </View>
           </View>
         )}
       </View>

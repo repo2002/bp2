@@ -15,7 +15,12 @@ export default function ProfilePostThumbnail({ post }) {
   return (
     <TouchableOpacity
       style={styles.thumbnail}
-      onPress={() => router.push(`/post/${post.id}`)}
+      onPress={() =>
+        router.push({
+          pathname: `/user/${post.user_id}/posts`,
+          params: { postId: post.id },
+        })
+      }
       activeOpacity={0.8}
     >
       {hasImage ? (

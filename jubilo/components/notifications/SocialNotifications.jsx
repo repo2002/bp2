@@ -1,82 +1,132 @@
 import Avatar from "@/components/Avatar";
+import ThemeText from "@/components/theme/ThemeText";
 import { timeAgo } from "@/helpers/common";
 import { useTheme } from "@/hooks/theme";
+import {
+  acceptFollowRequest,
+  denyFollowRequest,
+  followUser,
+} from "@/services/followService";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import { useRouter } from "expo-router";
+import { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-const SocialNotifications = ({ notification, sender, reference, onPress }) => {
-  const theme = useTheme();
+const SUPABASE_URL = "https://vqkpsuojfxlbbgkxedra.supabase.co";
+const BUCKET = "post-images"; // Change to your actual bucket name
 
-  const renderRightContent = () => {
-    switch (notification.category) {
-      case "like":
-      case "comment":
-        return reference?.images?.[0] ? (
-          <Image
-            source={{ uri: reference.images[0] }}
-            style={styles.image}
-            contentFit="cover"
-          />
-        ) : null;
-      case "follow_request":
-        return (
-          <View style={styles.followActions}>
-            {!notification.is_accepted ? (
-              <View style={styles.actionRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.actionButton,
-                    { backgroundColor: theme.colors.primary },
-                  ]}
-                  onPress={() => onPress?.("accept")}
-                >
-                  <Text style={styles.actionButtonText}>Accept</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => onPress?.("deny")}
-                  style={styles.denyButton}
-                >
-                  <Ionicons
-                    name="close"
-                    size={16}
-                    color={theme.colors.greyDark}
-                  />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  { backgroundColor: theme.colors.background },
-                ]}
-                onPress={() => onPress?.("follow")}
-              >
-                <Text
-                  style={[
-                    styles.actionButtonText,
-                    { color: theme.colors.text },
-                  ]}
-                >
-                  Follow
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        );
-      default:
-        return null;
+const SocialNotifications = ({ notification, sender, reference }) => {
+  const theme = useTheme();
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [actionState, setActionState] = useState(notification.status);
+
+  console.log("SocialNotifications reference:", reference);
+  console.log("SocialNotifications notification:", notification);
+
+  const handleAccept = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await acceptFollowRequest(notification.reference_id);
+      setActionState("accepted");
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  const handleDeny = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await denyFollowRequest(notification.reference_id);
+      setActionState("denied");
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  const handleFollowBack = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await followUser(sender.id);
+      setActionState("followed_back");
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  const handleNavigateToPost = () => {
+    if (reference && reference.id) {
+      router.push(`/post/${reference.id}`);
     }
   };
 
+  const handleNavigateToComment = () => {
+    if (
+      reference &&
+      reference.id &&
+      notification.reference_type === "post" &&
+      notification.category === "comment"
+    ) {
+      const commentId = notification.comment_id || notification.id;
+      router.push({
+        pathname: `/post/${reference.id}`,
+        params: { commentId },
+      });
+    } else {
+      handleNavigateToPost();
+    }
+  };
+
+  // The main notification row is tappable for like/comment
+  const isLike = notification.category === "like";
+  const isComment = notification.category === "comment";
+  const isPostNotification = isLike || isComment;
+  const RowWrapper = isPostNotification ? TouchableOpacity : View;
+  const rowWrapperProps = isPostNotification
+    ? {
+        onPress: isLike ? handleNavigateToPost : handleNavigateToComment,
+        activeOpacity: 0.8,
+      }
+    : {};
+
+  let imageUrl = null;
+  if (reference?.images?.[0]) {
+    // If it's already a full URL, use it as is
+    if (reference.images[0].startsWith("http")) {
+      imageUrl = reference.images[0];
+    } else {
+      imageUrl = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${reference.images[0]}`;
+    }
+  } else {
+    imageUrl =
+      reference?.image_url ||
+      reference?.photoUrl ||
+      reference?.cover ||
+      reference?.media?.[0];
+  }
+
+  // Thumbnail logic (like ProfilePostThumbnail)
+  const hasThumbnail =
+    reference?.images && reference.images.length > 0 && reference.images[0];
+  const thumbnailUrl = hasThumbnail
+    ? `${process.env.EXPO_PUBLIC_SUPABASE_URL}/storage/v1/object/public/post-media/${reference.images[0]}`
+    : null;
+
   return (
-    <View
+    <RowWrapper
       style={[
         styles.container,
-        {
-          backgroundColor: theme.colors.cardBackground,
-        },
+        { backgroundColor: theme.colors.cardBackground },
       ]}
+      {...rowWrapperProps}
     >
       <View
         style={[
@@ -84,8 +134,8 @@ const SocialNotifications = ({ notification, sender, reference, onPress }) => {
           {
             backgroundColor:
               notification.category === "follow_request"
-                ? "#9c27b0" // Purple for follow request
-                : "#2196f3", // Blue for other social
+                ? "#9c27b0"
+                : "#2196f3",
           },
         ]}
       >
@@ -141,9 +191,90 @@ const SocialNotifications = ({ notification, sender, reference, onPress }) => {
             </View>
           </View>
         </View>
-        <View style={styles.rightContent}>{renderRightContent()}</View>
+        <View style={styles.rightContent}>
+          {/* Show post thumbnail for like/comment, and actions for follow_request */}
+          {notification.category === "like" ||
+          notification.category === "comment" ? (
+            hasThumbnail ? (
+              <Image
+                source={{ uri: thumbnailUrl }}
+                style={styles.thumbnail}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={[
+                  styles.noImageContainer,
+                  { backgroundColor: theme.colors.cardBackground },
+                ]}
+              >
+                <ThemeText style={styles.textPreview}>
+                  {reference?.content
+                    ? reference.content.replace(/<[^>]+>/g, "").slice(0, 40)
+                    : "No content"}
+                </ThemeText>
+              </View>
+            )
+          ) : (
+            notification.category === "follow_request" && (
+              <View style={styles.followActions}>
+                {actionState === "pending" && (
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.actionButton,
+                        { backgroundColor: theme.colors.primary },
+                      ]}
+                      onPress={handleAccept}
+                      disabled={loading}
+                    >
+                      <Text style={styles.actionButtonText}>Accept</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={handleDeny}
+                      style={styles.denyButton}
+                      disabled={loading}
+                    >
+                      <Ionicons
+                        name="close"
+                        size={16}
+                        color={theme.colors.greyDark}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                {actionState === "accepted" && (
+                  <TouchableOpacity
+                    style={[
+                      styles.actionButton,
+                      { backgroundColor: theme.colors.background },
+                    ]}
+                    onPress={handleFollowBack}
+                    disabled={loading}
+                  >
+                    <Text
+                      style={[
+                        styles.actionButtonText,
+                        { color: theme.colors.text },
+                      ]}
+                    >
+                      Follow
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )
+          )}
+        </View>
       </View>
-    </View>
+      {error && (
+        <Text
+          style={{ color: theme.colors.error, marginLeft: 16, marginTop: 4 }}
+        >
+          {error}
+        </Text>
+      )}
+    </RowWrapper>
   );
 };
 
@@ -219,5 +350,30 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 12,
     fontWeight: "500",
+  },
+  denyButton: {
+    padding: 4,
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbnail: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: "#eee",
+  },
+  noImageContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#eee",
+    padding: 4,
+  },
+  textPreview: {
+    fontSize: 12,
+    textAlign: "center",
   },
 });

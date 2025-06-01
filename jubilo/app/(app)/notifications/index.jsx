@@ -1,5 +1,6 @@
 import LoadingIndicator from "@/components/LoadingIndicator";
 import NotificationRow from "@/components/NotificationRow";
+import SocialNotifications from "@/components/notifications/SocialNotifications";
 import ThemeText from "@/components/theme/ThemeText";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/theme";
@@ -217,13 +218,28 @@ export default function NotificationsScreen() {
       <FlatList
         data={filteredNotifications}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <NotificationRow
-            notification={item}
-            sender={item.sender}
-            reference={item.reference}
-          />
-        )}
+        renderItem={({ item }) => {
+          if (
+            item.category === "follow_request" ||
+            item.category === "like" ||
+            item.category === "comment"
+          ) {
+            return (
+              <SocialNotifications
+                notification={item}
+                sender={item.sender}
+                reference={item.reference}
+              />
+            );
+          }
+          return (
+            <NotificationRow
+              notification={item}
+              sender={item.sender}
+              reference={item.reference}
+            />
+          );
+        }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }

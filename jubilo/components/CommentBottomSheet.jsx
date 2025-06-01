@@ -4,7 +4,7 @@ import { useBottomSheet } from "@/contexts/BottomSheetContext";
 import { useTheme } from "@/hooks/theme";
 import { addComment, deleteComment, getComments } from "@/services/postService";
 import { Ionicons } from "@expo/vector-icons";
-import { forwardRef, useEffect, useMemo, useState } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -21,7 +21,7 @@ import ErrorMessage from "./ErrorMessage";
 import LoadingIndicator from "./LoadingIndicator";
 import UserChip from "./UserChip";
 
-const CommentBottomSheet = forwardRef((_, ref) => {
+const CommentBottomSheet = forwardRef(({ post, highlightCommentId }, ref) => {
   const theme = useTheme();
   const snapPoints = useMemo(() => ["80%"], []);
   const [comments, setComments] = useState([]);
@@ -31,10 +31,22 @@ const CommentBottomSheet = forwardRef((_, ref) => {
   const { user } = useAuth();
   const { selectedPost, commentSheetRef } = useBottomSheet();
   const [errorMsg, setErrorMsg] = useState(null);
+  const flatListRef = useRef(null);
 
   useEffect(() => {
     if (selectedPost?.id) fetchComments();
   }, [selectedPost?.id]);
+
+  useEffect(() => {
+    if (highlightCommentId && comments.length > 0) {
+      const index = comments.findIndex((c) => c.id === highlightCommentId);
+      if (index !== -1 && flatListRef.current) {
+        setTimeout(() => {
+          flatListRef.current.scrollToIndex({ index, animated: true });
+        }, 100);
+      }
+    }
+  }, [highlightCommentId, comments]);
 
   const fetchComments = async () => {
     setLoading(true);
@@ -102,6 +114,10 @@ const CommentBottomSheet = forwardRef((_, ref) => {
                   padding: 16,
                   borderRadius: 10,
                 },
+                item.id === highlightCommentId && {
+                  backgroundColor: "#ffe082",
+                  borderRadius: 6,
+                },
               ]}
             >
               <UserChip user={item.user} size={40} style={{ flex: 1 }}>
@@ -128,6 +144,7 @@ const CommentBottomSheet = forwardRef((_, ref) => {
               <EmptyState message="No comments yet." />
             )
           }
+          ref={flatListRef}
         />
         {/* Input at the bottom */}
         <KeyboardAvoidingView

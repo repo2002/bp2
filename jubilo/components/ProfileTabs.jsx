@@ -4,6 +4,7 @@ import { useBottomSheet } from "@/contexts/BottomSheetContext";
 import { useTheme } from "@/hooks/theme";
 import { fetchPostsByUser } from "@/services/postService";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -49,6 +50,8 @@ function PostsTab({ userId }) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const flatListRef = useRef(null);
+  const { postId } = useLocalSearchParams();
 
   const fetchData = async () => {
     setLoading(true);
@@ -60,6 +63,17 @@ function PostsTab({ userId }) {
   useEffect(() => {
     fetchData();
   }, [userId]);
+
+  useEffect(() => {
+    if (postId && posts.length > 0) {
+      const index = posts.findIndex((p) => p.id === postId);
+      if (index !== -1 && flatListRef.current) {
+        setTimeout(() => {
+          flatListRef.current.scrollToIndex({ index, animated: true });
+        }, 100);
+      }
+    }
+  }, [postId, posts]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -76,6 +90,7 @@ function PostsTab({ userId }) {
 
   return (
     <FlatList
+      ref={flatListRef}
       data={posts}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => <ProfilePostThumbnail post={item} />}
