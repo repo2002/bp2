@@ -23,9 +23,6 @@ const SocialNotifications = ({ notification, sender, reference }) => {
   const [error, setError] = useState(null);
   const [actionState, setActionState] = useState(notification.status);
 
-  console.log("SocialNotifications reference:", reference);
-  console.log("SocialNotifications notification:", notification);
-
   const handleAccept = async () => {
     setLoading(true);
     setError(null);

@@ -1,82 +1,172 @@
+import EmptyState from "@/components/EmptyState";
 import ThemeText from "@/components/theme/ThemeText";
+import { useAuth } from "@/contexts/AuthContext";
+import { useChatSearch } from "@/contexts/SearchContext";
 import { useTheme } from "@/hooks/theme";
-import { Ionicons } from "@expo/vector-icons";
+import { supabase } from "@/lib/supabase";
+import { getUserChats } from "@/services/chatService";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Image,
+  RefreshControl,
   StyleSheet,
-  TextInput,
+  Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const CONVERSATIONS = [
-  {
-    id: "1",
-    user: {
-      name: "Sarah Johnson",
-      avatar: "https://i.pravatar.cc/150?img=10",
-    },
-    lastMessage: "See you at the community meeting!",
-    time: "2m ago",
-    unread: 2,
-  },
-  {
-    id: "2",
-    user: {
-      name: "Mike Chen",
-      avatar: "https://i.pravatar.cc/150?img=11",
-    },
-    lastMessage: "Thanks for the ride yesterday!",
-    time: "1h ago",
-    unread: 0,
-  },
-  {
-    id: "3",
-    user: {
-      name: "Emma Davis",
-      avatar: "https://i.pravatar.cc/150?img=12",
-    },
-    lastMessage: "The book club meeting is at 7 PM",
-    time: "3h ago",
-    unread: 1,
-  },
-  {
-    id: "4",
-    user: {
-      name: "Community Group",
-      avatar: "https://i.pravatar.cc/150?img=13",
-    },
-    lastMessage: "New event: Neighborhood Cleanup this weekend",
-    time: "5h ago",
-    unread: 5,
-  },
-];
-
-export default function Chats() {
+export default function ChatsIndex() {
+  const router = useRouter();
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
+  const { search } = useChatSearch();
+  const { user } = useAuth();
+  const [rooms, setRooms] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+
+  const fetchChats = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      setError(null);
+      const { success, data, error } = await getUserChats(user.id);
+
+      if (success) {
+        const formattedRooms = data.map((room) => {
+          const lastMsg = room.last_message?.[0];
+          const otherParticipant = room.participants?.find(
+            (p) => p.user.id !== user.id
+          );
+
+          // Compose display name for the other participant
+          let participantName = null;
+          if (otherParticipant) {
+            const { first_name, last_name, username } = otherParticipant.user;
+            participantName = [first_name, last_name].filter(Boolean).join(" ");
+            if (!participantName) participantName = username;
+          }
+
+          // Compose display name for the last message sender
+          let lastMsgSender = null;
+          if (lastMsg?.sender) {
+            const { first_name, last_name, username } = lastMsg.sender;
+            lastMsgSender = [first_name, last_name].filter(Boolean).join(" ");
+            if (!lastMsgSender) lastMsgSender = username;
+          }
+
+          return {
+            id: room.id,
+            name: room.is_group ? room.name : participantName,
+            is_group: room.is_group,
+            avatar: room.is_group
+              ? `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  room.name
+                )}`
+              : otherParticipant?.user.image_url,
+            lastMsg: lastMsg
+              ? {
+                  text: lastMsg.content,
+                  sender: lastMsgSender,
+                  createdAt: lastMsg.created_at,
+                  type: lastMsg.type,
+                }
+              : null,
+            unread: 0, // TODO: Implement unread count
+            participants: room.participants,
+          };
+        });
+
+        setRooms(formattedRooms);
+      } else {
+        setError(error);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchChats();
+
+    // Subscribe to new messages
+    const subscription = supabase
+      .channel("chat_messages")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "chat_messages",
+        },
+        () => {
+          fetchChats();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchChats]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchChats();
+  }, [fetchChats]);
+
+  const filteredRooms = rooms.filter((room) =>
+    room.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   const renderConversation = ({ item }) => (
     <TouchableOpacity
-      style={[styles.conversationCard, { backgroundColor: theme.colors.card }]}
+      onPress={() => router.push(`/chats/${item.id}`)}
+      style={[styles.conversationCard, { borderColor: theme.colors.text }]}
     >
-      <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
+      <Image
+        source={{ uri: item.avatar }}
+        style={styles.avatar}
+        defaultSource={require("@/assets/images/default-avatar.png")}
+      />
       <View style={styles.conversationInfo}>
         <View style={styles.conversationHeader}>
-          <ThemeText style={styles.userName}>{item.user.name}</ThemeText>
-          <ThemeText style={[styles.time, { color: theme.colors.grey }]}>
-            {item.time}
-          </ThemeText>
+          <ThemeText style={styles.userName}>{item.name}</ThemeText>
+          {item.lastMsg?.createdAt && (
+            <ThemeText style={styles.lastMessageTime}>
+              {new Date(item.lastMsg.createdAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </ThemeText>
+          )}
         </View>
         <View style={styles.messageContainer}>
-          <ThemeText
-            style={[styles.lastMessage, { color: theme.colors.grey }]}
-            numberOfLines={1}
-          >
-            {item.lastMessage}
-          </ThemeText>
+          <View style={styles.messageRow}>
+            {item.is_group && item.lastMsg?.sender && (
+              <ThemeText style={styles.senderName} numberOfLines={1}>
+                {item.lastMsg.sender}:
+              </ThemeText>
+            )}
+            <ThemeText color={theme.colors.greyDark} numberOfLines={1}>
+              {item.lastMsg?.type === "text"
+                ? item.lastMsg.text
+                : item.lastMsg?.type === "image"
+                ? "📷 Image"
+                : item.lastMsg?.type === "video"
+                ? "🎥 Video"
+                : item.lastMsg?.type === "audio"
+                ? "🎵 Voice message"
+                : "New message"}
+            </ThemeText>
+          </View>
+
           {item.unread > 0 && (
             <View
               style={[
@@ -84,7 +174,7 @@ export default function Chats() {
                 { backgroundColor: theme.colors.primary },
               ]}
             >
-              <ThemeText style={styles.unreadCount}>{item.unread}</ThemeText>
+              <Text style={styles.unreadCount}>{item.unread}</Text>
             </View>
           )}
         </View>
@@ -92,101 +182,75 @@ export default function Chats() {
     </TouchableOpacity>
   );
 
+  if (loading && !refreshing) {
+    return (
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <EmptyState
+          message="Error loading chats"
+          subMessage={error}
+          action={{
+            label: "Try Again",
+            onPress: fetchChats,
+          }}
+        />
+      </View>
+    );
+  }
+
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: theme.colors.background,
-          paddingTop: insets.top,
-        },
+    <FlatList
+      data={filteredRooms}
+      renderItem={renderConversation}
+      keyExtractor={(item) => item.id}
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={[
+        styles.listContent,
+        { backgroundColor: theme.colors.background },
       ]}
-    >
-      <View style={styles.header}>
-        <ThemeText style={styles.title}>Messages</ThemeText>
-        <TouchableOpacity style={styles.createButton}>
-          <Ionicons
-            name="create-outline"
-            size={24}
-            color={theme.colors.primary}
-          />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.searchContainer}>
-        <Ionicons
-          name="search-outline"
-          size={20}
-          color={theme.colors.grey}
-          style={styles.searchIcon}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={theme.colors.primary}
         />
-        <TextInput
-          style={[styles.searchInput, { color: theme.colors.text }]}
-          placeholder="Search messages"
-          placeholderTextColor={theme.colors.grey}
+      }
+      ListEmptyComponent={
+        <EmptyState
+          message="No chats yet"
+          subMessage="Start a new conversation by tapping the + button"
         />
-      </View>
-
-      <FlatList
-        data={CONVERSATIONS}
-        renderItem={renderConversation}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.conversationsList}
-        showsVerticalScrollIndicator={false}
-      />
-    </View>
+      }
+    />
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  createButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
     justifyContent: "center",
-  },
-  searchContainer: {
-    flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    marginHorizontal: 20,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    height: 40,
-    borderRadius: 20,
   },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-  },
-  conversationsList: {
-    padding: 16,
-    gap: 16,
+  listContent: {
+    flexGrow: 1,
   },
   conversationCard: {
     flexDirection: "row",
     padding: 12,
     borderRadius: 16,
-    marginBottom: 8,
+    borderBottomWidth: 0.2,
   },
   avatar: {
     width: 50,
@@ -208,18 +272,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  time: {
+  lastMessageTime: {
     fontSize: 12,
+    color: "#888",
   },
   messageContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  lastMessage: {
+  messageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
+    flexGrow: 0,
+    minWidth: 0,
+  },
+  senderName: {
     fontSize: 14,
-    flex: 1,
-    marginRight: 8,
+    fontWeight: "600",
+    marginRight: 4,
+    color: "#888",
+    maxWidth: 100,
   },
   unreadBadge: {
     minWidth: 20,

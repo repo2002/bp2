@@ -1,4 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
+import { getShortContent } from "@/helpers/common";
 import { useRouter } from "expo-router";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import Avatar from "./Avatar";
@@ -29,7 +30,9 @@ export default function UserChip({
       <View style={[styles.row, style]}>
         <Avatar uri={user.image_url} size={size} />
         <View style={styles.texts}>
-          <ThemeText style={styles.username}>{user.username}</ThemeText>
+          <ThemeText style={styles.username}>
+            {getShortContent(user.username, 20)}
+          </ThemeText>
           {subtitle && (
             <ThemeText style={styles.subtitle}>{subtitle}</ThemeText>
           )}

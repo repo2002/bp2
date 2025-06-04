@@ -27,19 +27,13 @@ export default function UserHeader({ user }) {
         getUserPostCount(user.id),
       ]);
 
-      console.log("Loading stats:", {
-        followers: followersRes.data?.length || 0,
-        following: followingRes.data?.length || 0,
-        posts: postsRes.data || 0,
-      });
-
       setStats({
         followers: followersRes.data?.length || 0,
         following: followingRes.data?.length || 0,
         posts: postsRes.data || 0,
       });
     } catch (error) {
-      console.error("Error loading user stats:", error);
+      Error("Error loading user stats:", error);
     }
   }, [user?.id]);
 
@@ -49,20 +43,18 @@ export default function UserHeader({ user }) {
 
   // Subscribe to changes as follower
   useFollowersSubscriptionAsFollower(user?.id, async (payload) => {
-    console.log("Realtime update as follower:", payload);
     await loadStats();
   });
 
   // Subscribe to changes as following
   useFollowersSubscription(user?.id, async (payload) => {
-    console.log("Realtime update as following:", payload);
     await loadStats();
   });
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Avatar uri={user.image_url} size={80} />
+        <Avatar uri={user?.image_url} size={80} />
         <View style={styles.userInfo}>
           <View style={{ flexDirection: "row", gap: 4 }}>
             <MaterialCommunityIcons

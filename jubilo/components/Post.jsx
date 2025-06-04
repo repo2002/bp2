@@ -26,7 +26,6 @@ export default function Post({ post }) {
           </ThemeText>
         </View>
       </View>
-      {/* Rest of your post content */}
     </View>
   );
 }

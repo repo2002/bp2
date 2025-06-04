@@ -8,8 +8,6 @@ export default function useNotificationsSubscription(onNewNotification) {
   useEffect(() => {
     if (!user?.id) return;
 
-    console.log("Setting up notifications subscription for user:", user.id);
-
     const channel = supabase
       .channel("notifications-realtime")
       .on(
@@ -21,18 +19,14 @@ export default function useNotificationsSubscription(onNewNotification) {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          console.log("Received new notification:", payload);
           if (onNewNotification) {
             onNewNotification(payload.new);
           }
         }
       )
-      .subscribe((status) => {
-        console.log("Subscription status:", status);
-      });
+      .subscribe();
 
     return () => {
-      console.log("Cleaning up notifications subscription");
       channel.unsubscribe();
     };
   }, [user?.id, onNewNotification]);

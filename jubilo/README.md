@@ -1,50 +1,149 @@
-# Welcome to your Expo app 👋
+# Events Feature
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Core Features
 
-## Get started
+### Event Creation & Management
 
-1. Install dependencies
+- [ ] Create Event
+  - [ ] Title
+  - [ ] Description (HTML support)
+  - [ ] Date & Time picker
+  - [ ] Location (Google Maps/Places integration)
+  - [ ] Cover image upload
+  - [ ] Privacy toggle (Public/Private)
+  - [ ] Category selection (Party, Meeting, Sports, Music, Food, Festival, Wedding, Reunion, Other)
+  - [ ] Max participants limit
+  - [ ] Dress code
+  - [ ] Allow guests to post toggle
 
-   ```bash
-   npm install
-   ```
+### Privacy System
 
-2. Start the app
+- [ ] Public Events
+  - [ ] Discoverable in feed
+  - [ ] Visible in search
+  - [ ] Anyone can RSVP
+- [ ] Private Events
+  - [ ] Only visible to invited users
+  - [ ] Manual invites
+  - [ ] Suggested invites (from followers/following)
+  - [ ] Hidden from public feeds/search
 
-   ```bash
-   npx expo start
-   ```
+### Invitations & RSVP
 
-In the output, you'll find options to open the app in a
+- [ ] Invitation System
+  - [ ] Host can invite during creation
+  - [ ] Host can invite after creation
+  - [ ] Invitation notifications
+  - [ ] Invitation management
+- [ ] RSVP System
+  - [ ] Going ✅
+  - [ ] Maybe 🤔
+  - [ ] Not Going ❌
+  - [ ] RSVP counts for host
+  - [ ] Attendee list (visible to invited users)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Event Interaction
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- [ ] Questions & Answers
+  - [ ] Ask questions
+  - [ ] Answer questions
+  - [ ] Thread-like Q&A display
+  - [ ] Question notifications
+- [ ] Event Posts
+  - [ ] Create posts
+  - [ ] View posts
+  - [ ] Post permissions (host controlled)
+- [ ] Event Images
+  - [ ] Upload images
+  - [ ] Set primary image
+  - [ ] Delete images
+  - [ ] Image gallery
+  - [ ] Download all images
 
-## Get a fresh project
+### Event Discovery
 
-When you're ready, run:
+- [ ] Event Feed
+  - [ ] Public events
+  - [ ] Events I'm invited to
+  - [ ] Events I'm attending
+  - [ ] Events I'm following
+- [ ] Search & Filter
+  - [ ] Search by title/description
+  - [ ] Filter by date
+  - [ ] Filter by privacy
+  - [ ] Filter by status
+  - [ ] Filter by participation
 
-```bash
-npm run reset-project
-```
+### Event Details
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+- [ ] Event Information
+  - [ ] Basic details
+  - [ ] Host information
+  - [ ] Participant list
+  - [ ] RSVP status
+  - [ ] Image gallery
+- [ ] Event Actions
+  - [ ] RSVP management
+  - [ ] Follow/Unfollow
+  - [ ] Share event
+  - [ ] Report event
 
-## Learn more
+## Technical Implementation
 
-To learn more about developing your project with Expo, look at the following resources:
+### Services Layer
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- [x] Event CRUD operations
+- [x] RSVP management
+- [x] Follow/Unfollow
+- [x] Invitation system
+- [x] Questions & Answers
+- [x] Posts management
+- [x] Image management
 
-## Join the community
+### UI Components
 
-Join our community of developers creating universal apps.
+- [ ] Event Card
+- [ ] Event Filters
+- [ ] Event Search
+- [ ] Event Status Badge
+- [ ] Event Stats Display
+- [ ] Event Gallery
+- [ ] Event Participants List
+- [ ] Event Posts Feed
+- [ ] Event Q&A Section
+- [ ] Event Actions
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+### Screens
+
+- [ ] Events List Screen
+- [ ] Event Detail Screen
+- [ ] Event Creation Screen
+- [ ] Event Edit Screen
+- [ ] Event Invite Screen
+
+### Hooks
+
+- [ ] useEvents
+- [ ] useEventDetails
+- [ ] useEventRSVP
+- [ ] useEventInvites
+
+## Database Schema
+
+- [x] events
+- [x] event_participants
+- [x] event_followers
+- [x] event_invites
+- [x] event_questions
+- [x] event_answers
+- [x] event_posts
+- [x] event_images
+
+## Security & Policies
+
+- [x] Public event visibility
+- [x] Private event access control
+- [x] RSVP permissions
+- [x] Post permissions
+- [x] Image management permissions
+- [x] Question/Answer permissions

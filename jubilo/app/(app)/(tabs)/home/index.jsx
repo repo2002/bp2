@@ -243,7 +243,18 @@ export default function Home() {
     >
       <View style={[styles.header, { borderColor: theme.colors.greyLight }]}>
         <ThemeText style={styles.title}>Jubilo</ThemeText>
+
         <View style={styles.headerButtons}>
+          <TouchableOpacity
+            onPress={() => router.push("/search")}
+            style={styles.createButton}
+          >
+            <MaterialCommunityIcons
+              name="magnify"
+              size={26}
+              color={theme.colors.text}
+            />
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.createButton}
             onPress={() => {
@@ -276,10 +287,10 @@ export default function Home() {
           >
             <Avatar
               size={30}
-              uri={user.image_url}
+              uri={user?.image_url}
               style={{
                 borderWidth: 2,
-                borderColor: user.is_verified ? "gold" : "transparent",
+                borderColor: user?.is_verified ? "gold" : "transparent",
               }}
             />
           </TouchableOpacity>

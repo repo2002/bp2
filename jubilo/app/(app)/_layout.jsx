@@ -19,6 +19,7 @@ export default function AppLayout() {
         <Stack.Screen name="notifications/index" />
         <Stack.Screen name="post/index" />
         <Stack.Screen name="profile/index" />
+        <Stack.Screen name="search/index" />
       </Stack>
       <CommentBottomSheet />
       <ShareBottomSheet />

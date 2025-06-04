@@ -1,5 +1,6 @@
 import { useTheme } from "@/hooks/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { getFocusedRouteNameFromRoute } from "@react-navigation/native";
 import { Tabs } from "expo-router";
 
 export default function AppLayout() {
@@ -11,8 +12,8 @@ export default function AppLayout() {
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: {
-          backgroundColor: theme.colors.card,
-          borderTopColor: theme.colors.border,
+          backgroundColor: theme.colors.background,
+          borderTopColor: theme.colors.grey,
           height: 70,
           paddingBottom: 0,
           marginBottom: 0,
@@ -51,7 +52,7 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="events/index"
+        name="events"
         options={{
           title: "Events",
           tabBarIcon: ({ color, size }) => (
@@ -60,12 +61,31 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="chats/index"
-        options={{
-          title: "Chats",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubbles" size={size} color={color} />
-          ),
+        name="chats"
+        options={({ route }) => {
+          const routeName = getFocusedRouteNameFromRoute(route) ?? "index";
+          return {
+            title: "Chats",
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="chatbubbles" size={size} color={color} />
+            ),
+
+            tabBarShowLabel: false,
+            tabBarStyle:
+              routeName === "[id]"
+                ? { display: "none" }
+                : {
+                    backgroundColor: theme.colors.background,
+                    borderTopColor: theme.colors.grey,
+                    height: 70,
+                    paddingBottom: 0,
+                    marginBottom: 0,
+                    paddingTop: 8,
+                    alignItems: "center",
+                  },
+            tabBarActiveTintColor: theme.colors.primary,
+            tabBarInactiveTintColor: theme.colors.grey,
+          };
         }}
       />
     </Tabs>

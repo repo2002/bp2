@@ -1,146 +1,241 @@
-import ThemeText from "@/components/theme/ThemeText";
+import EventCard from "@/components/events/EventCard";
+import EventCardMedium from "@/components/events/EventCardMedium";
+import Section from "@/components/events/Section";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/theme";
-import { Ionicons } from "@expo/vector-icons";
 import {
-  FlatList,
-  Image,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+  filterFeaturedEvents,
+  filterNearYouEvents,
+  filterPastEvents,
+  filterPopularEvents,
+  filterRecommendedEvents,
+  filterUpcomingEvents,
+  getEvents,
+} from "@/services/events";
+import {
+  FontAwesome5,
+  Ionicons,
+  MaterialCommunityIcons,
+} from "@expo/vector-icons";
+import * as Location from "expo-location";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
 
-const EVENTS = [
-  {
-    id: "1",
-    title: "Community Cleanup Day",
-    date: "Saturday, March 23",
-    time: "9:00 AM - 12:00 PM",
-    location: "Central Park",
-    image: "https://images.unsplash.com/photo-1471286174890-9c112ffca5b4?w=500",
-    attendees: 45,
-  },
-  {
-    id: "2",
-    title: "Neighborhood Book Club",
-    date: "Thursday, March 21",
-    time: "7:00 PM - 9:00 PM",
-    location: "Community Center",
-    image: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=500",
-    attendees: 12,
-  },
-  {
-    id: "3",
-    title: "Local Farmers Market",
-    date: "Sunday, March 24",
-    time: "10:00 AM - 2:00 PM",
-    location: "Downtown Square",
-    image: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=500",
-    attendees: 89,
-  },
-];
-
-export default function Events() {
+export default function EventsIndexScreen() {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const router = useRouter();
+  const { user } = useAuth();
+  const userId = user?.id;
 
-  const renderEvent = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.eventCard, { backgroundColor: theme.colors.card }]}
-    >
-      <Image source={{ uri: item.image }} style={styles.eventImage} />
-      <View style={styles.eventContent}>
-        <ThemeText style={styles.eventTitle}>{item.title}</ThemeText>
+  const [userLocation, setUserLocation] = useState(null);
+  const [userAddress, setUserAddress] = useState(null);
 
-        <View style={styles.eventDetails}>
-          <View style={styles.detailRow}>
-            <Ionicons
-              name="calendar-outline"
-              size={16}
-              color={theme.colors.grey}
-            />
-            <ThemeText
-              style={[styles.detailText, { color: theme.colors.grey }]}
-            >
-              {item.date}
-            </ThemeText>
-          </View>
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        let location = await Location.getCurrentPositionAsync({});
+        setUserLocation({
+          lat: location.coords.latitude,
+          lng: location.coords.longitude,
+        });
+      }
+    })();
+  }, []);
 
-          <View style={styles.detailRow}>
-            <Ionicons name="time-outline" size={16} color={theme.colors.grey} />
-            <ThemeText
-              style={[styles.detailText, { color: theme.colors.grey }]}
-            >
-              {item.time}
-            </ThemeText>
-          </View>
+  useEffect(() => {
+    if (userLocation) {
+      (async () => {
+        try {
+          // Use Expo Location reverse geocoding
+          let [place] = await Location.reverseGeocodeAsync({
+            latitude: userLocation.lat,
+            longitude: userLocation.lng,
+          });
+          if (place) {
+            setUserAddress(
+              [
+                place.name,
+                place.street,
+                place.city,
+                place.region,
+                place.country,
+              ]
+                .filter(Boolean)
+                .join(", ")
+            );
+          }
+        } catch (e) {
+          setUserAddress("Unknown location");
+        }
+      })();
+    }
+  }, [userLocation]);
 
-          <View style={styles.detailRow}>
-            <Ionicons
-              name="location-outline"
-              size={16}
-              color={theme.colors.grey}
-            />
-            <ThemeText
-              style={[styles.detailText, { color: theme.colors.grey }]}
-            >
-              {item.location}
-            </ThemeText>
-          </View>
-        </View>
+  const friendsIds = []; // TODO: fetch from your backend
+  const invitedEventIds = []; // TODO: fetch from your backend
 
-        <View style={styles.footer}>
-          <View style={styles.attendeesContainer}>
-            <Ionicons
-              name="people-outline"
-              size={16}
-              color={theme.colors.primary}
-            />
-            <ThemeText
-              style={[styles.attendees, { color: theme.colors.primary }]}
-            >
-              {item.attendees} attending
-            </ThemeText>
-          </View>
+  const fetchEvents = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const { events: fetchedEvents } = await getEvents({ limit: 50 });
+      setEvents(fetchedEvents || []);
+    } catch (e) {
+      // handle error, show toast, etc.
+    } finally {
+      setRefreshing(false);
+      setLoading(false);
+    }
+  }, []);
 
-          <TouchableOpacity
-            style={[
-              styles.joinButton,
-              { backgroundColor: theme.colors.primary },
-            ]}
-          >
-            <ThemeText style={styles.joinButtonText}>Join Event</ThemeText>
-          </TouchableOpacity>
-        </View>
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
+
+  const handleEventPress = (event) => {
+    router.push({
+      pathname: `/events/${event.id}`,
+      params: { eventTitle: event.title },
+    });
+  };
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.center,
+          { backgroundColor: theme.colors.background, flex: 1 },
+        ]}
+      >
+        <ActivityIndicator color={theme.colors.primary} size="large" />
       </View>
-    </TouchableOpacity>
+    );
+  }
+
+  const featuredEvents = filterFeaturedEvents(events);
+  const upcomingEvents = filterUpcomingEvents(events);
+  const nearYouEvents = filterNearYouEvents(events, userLocation);
+  const recommendedEvents = filterRecommendedEvents(
+    events,
+    userId,
+    friendsIds,
+    invitedEventIds
   );
+  const popularEvents = filterPopularEvents(events);
+  const pastEvents = filterPastEvents(events);
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: theme.colors.background,
-          paddingTop: insets.top,
-        },
-      ]}
-    >
-      <View style={styles.header}>
-        <ThemeText style={styles.title}>Events</ThemeText>
-        <TouchableOpacity style={styles.createButton}>
-          <Ionicons name="add" size={24} color={theme.colors.primary} />
-        </TouchableOpacity>
-      </View>
+    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      {/* 1. Featured Events */}
+      <Section
+        icon={<Ionicons name="star" size={22} color="#FFD93D" />}
+        title="Featured Events"
+        description="Hand-picked events you shouldn't miss."
+      >
+        <View>
+          {featuredEvents.map((event) => (
+            <EventCard
+              key={event.id}
+              event={event}
+              onPress={() => handleEventPress(event)}
+            />
+          ))}
+        </View>
+      </Section>
 
-      <FlatList
-        data={EVENTS}
-        renderItem={renderEvent}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.eventsList}
-        showsVerticalScrollIndicator={false}
-      />
-    </View>
+      {/* 2. Upcoming Events */}
+      <Section
+        icon={<Ionicons name="calendar" size={22} color="#4a90e2" />}
+        title="Upcoming Events"
+        description="What's happening soon? Don't miss out!"
+      >
+        {upcomingEvents.map((event) => (
+          <EventCardMedium
+            key={event.id}
+            event={event}
+            onPress={() => handleEventPress(event)}
+          />
+        ))}
+      </Section>
+
+      {/* 3. Events Near You */}
+      <Section
+        icon={<Ionicons name="location" size={22} color="#6BCB77" />}
+        title="Events Near You"
+        description={`Discover events happening close to your location. ${
+          userAddress ? `(${userAddress})` : ""
+        }`}
+      >
+        {nearYouEvents.map((event) => (
+          <EventCardMedium
+            key={event.id}
+            event={event}
+            onPress={() => handleEventPress(event)}
+          />
+        ))}
+      </Section>
+
+      {/* 4. Recommended For You */}
+      <Section
+        icon={
+          <MaterialCommunityIcons
+            name="account-heart"
+            size={22}
+            color="#FF6B81"
+          />
+        }
+        title="Recommended For You"
+        description="Events we think you'll love, based on your interests."
+      >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ paddingLeft: 16 }}
+        >
+          {recommendedEvents.map((event) => (
+            <EventCard
+              key={event.id}
+              event={event}
+              onPress={() => handleEventPress(event)}
+            />
+          ))}
+        </ScrollView>
+      </Section>
+
+      {/* 5. Popular This Week */}
+      <Section
+        icon={<FontAwesome5 name="fire" size={20} color="#FF6B81" />}
+        title="Popular This Week"
+        description="Trending events everyone is talking about."
+      >
+        {popularEvents.map((event) => (
+          <EventCardMedium
+            key={event.id}
+            event={event}
+            onPress={() => handleEventPress(event)}
+          />
+        ))}
+      </Section>
+
+      {/* 6. Past Events */}
+      <Section
+        icon={<Ionicons name="time" size={22} color="#888" />}
+        title="Past Events"
+        description="Look back at events you've attended or missed."
+      >
+        {pastEvents.map((event) => (
+          <EventCardMedium
+            key={event.id}
+            event={event}
+            onPress={() => handleEventPress(event)}
+          />
+        ))}
+      </Section>
+    </ScrollView>
   );
 }
 
@@ -148,80 +243,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  createButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F3F4F6",
+
+  center: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-  },
-  eventsList: {
-    padding: 16,
-    gap: 16,
-  },
-  eventCard: {
-    borderRadius: 16,
-    overflow: "hidden",
-    marginBottom: 16,
-  },
-  eventImage: {
-    width: "100%",
-    height: 200,
-    resizeMode: "cover",
-  },
-  eventContent: {
-    padding: 16,
-  },
-  eventTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 12,
-  },
-  eventDetails: {
-    gap: 8,
-    marginBottom: 16,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  detailText: {
-    fontSize: 14,
-  },
-  footer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  attendeesContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  attendees: {
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  joinButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  joinButtonText: {
-    color: "white",
-    fontWeight: "600",
   },
 });
