@@ -1,7 +1,92 @@
 import { supabase } from "@/lib/supabase";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as VideoThumbnails from "expo-video-thumbnails";
 
 // Get all chat rooms for the current user
 export const getUserChats = async (userId) => {
+  try {
+    // First get all room IDs where the user is a participant
+    const { data: participantRooms, error: participantError } = await supabase
+      .from("chat_participants")
+      .select("room_id")
+      .eq("user_id", userId);
+
+    if (participantError) {
+      console.error("Error fetching participant rooms:", participantError);
+      throw participantError;
+    }
+
+    if (!participantRooms || participantRooms.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    const roomIds = participantRooms.map((p) => p.room_id);
+
+    // Then get the full chat room data for those rooms
+    const { data, error } = await supabase
+      .from("chat_rooms")
+      .select(
+        `
+        *,
+        participants:chat_participants (
+          user:user_id (
+            id,
+            username,
+            first_name,
+            last_name,
+            image_url
+          ),
+          role
+        ),
+        last_message:chat_messages!room_id (
+          content,
+          type,
+          created_at,
+          sender:sender_id (
+            id,
+            username,
+            first_name,
+            last_name,
+            image_url
+          )
+        )
+      `
+      )
+      .in("id", roomIds)
+      .order("updated_at", { ascending: false });
+
+    // For each room, only keep the latest message in last_message
+    let roomsWithUnread = [];
+    if (data) {
+      roomsWithUnread = await Promise.all(
+        data.map(async (room) => {
+          if (room.last_message && Array.isArray(room.last_message)) {
+            room.last_message = room.last_message
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+              .slice(0, 1);
+          }
+          // Fetch unread count for this room
+          const { success, data: unreadCount } = await getUnreadCount(
+            room.id,
+            userId
+          );
+          room.unread = success ? unreadCount : 0;
+
+          return room;
+        })
+      );
+    }
+
+    if (error) throw error;
+    return { success: true, data: roomsWithUnread };
+  } catch (error) {
+    console.error("Error fetching user chats:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Get a single chat room by ID
+export const getChatById = async (roomId, userId) => {
   try {
     const { data, error } = await supabase
       .from("chat_rooms")
@@ -18,46 +103,19 @@ export const getUserChats = async (userId) => {
           ),
           role
         ),
-        last_message:chat_messages (
+        messages:chat_messages (
+          id,
           content,
           type,
+          metadata,
           created_at,
           sender:sender_id (
             id,
             username,
             first_name,
-            last_name
-          )
-        )
-      `
-      )
-      .order("updated_at", { ascending: false });
-
-    if (error) throw error;
-    return { success: true, data };
-  } catch (error) {
-    console.error("Error fetching user chats:", error);
-    return { success: false, error: error.message };
-  }
-};
-
-// Get a single chat room by ID
-export const getChatById = async (roomId) => {
-  try {
-    const { data, error } = await supabase
-      .from("chat_rooms")
-      .select(
-        `
-        *,
-        participants:chat_participants (
-          user:user_id (
-            id,
-            username,
-            first_name,
             last_name,
             image_url
-          ),
-          role
+          )
         )
       `
       )
@@ -65,7 +123,16 @@ export const getChatById = async (roomId) => {
       .single();
 
     if (error) throw error;
-    return { success: true, data };
+    // Fetch unread count for this room
+    let unread = 0;
+    if (userId) {
+      const { success, data: unreadCount } = await getUnreadCount(
+        roomId,
+        userId
+      );
+      unread = success ? unreadCount : 0;
+    }
+    return { success: true, data: { ...data, unread } };
   } catch (error) {
     console.error("Error fetching chat:", error);
     return { success: false, error: error.message };
@@ -78,9 +145,30 @@ export const createDirectChat = async (userId, otherUserId) => {
     // Get the authenticated user's ID
     const {
       data: { user },
-      error,
+      error: authError,
     } = await supabase.auth.getUser();
-    console.log("Current user:", user, "Error:", error);
+
+    if (authError) {
+      console.error("Auth error:", authError);
+      throw new Error("Failed to get authenticated user");
+    }
+
+    // Verify that the passed userId matches the authenticated user
+    if (userId !== user.id) {
+      throw new Error(
+        "User ID mismatch: passed ID does not match authenticated user"
+      );
+    }
+
+    // First, try to get the current user's session to verify auth state
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+    if (sessionError) {
+      console.error("Session error:", sessionError);
+      throw new Error("Failed to get session");
+    }
 
     // 1. Find all non-group chat rooms where the current user is a participant
     const { data: myRooms, error: myRoomsError } = await supabase
@@ -88,7 +176,10 @@ export const createDirectChat = async (userId, otherUserId) => {
       .select("room_id")
       .eq("user_id", userId);
 
-    if (myRoomsError) throw myRoomsError;
+    if (myRoomsError) {
+      console.error("Error fetching user's rooms:", myRoomsError);
+      throw myRoomsError;
+    }
 
     const roomIds = myRooms.map((p) => p.room_id);
 
@@ -102,16 +193,25 @@ export const createDirectChat = async (userId, otherUserId) => {
         .in("id", roomIds)
         .eq("is_group", false);
 
-      if (roomError) throw roomError;
+      if (roomError) {
+        console.error("Error fetching direct rooms:", roomError);
+        throw roomError;
+      }
 
       for (const room of directRooms) {
         // Check if the other user is a participant
-        const { data: otherParticipant } = await supabase
-          .from("chat_participants")
-          .select("id")
-          .eq("room_id", room.id)
-          .eq("user_id", otherUserId)
-          .single();
+        const { data: otherParticipant, error: participantError } =
+          await supabase
+            .from("chat_participants")
+            .select("id")
+            .eq("room_id", room.id)
+            .eq("user_id", otherUserId)
+            .single();
+
+        if (participantError && participantError.code !== "PGRST116") {
+          console.error("Error checking other participant:", participantError);
+          throw participantError;
+        }
 
         if (otherParticipant) {
           // Found existing direct chat
@@ -121,35 +221,60 @@ export const createDirectChat = async (userId, otherUserId) => {
     }
 
     // Create new chat room
+    const insertData = {
+      is_group: false,
+      created_by: userId,
+      updated_at: new Date().toISOString(),
+    };
+
+    // First, verify we can read from the table
+    const { data: testRead, error: testReadError } = await supabase
+      .from("chat_rooms")
+      .select("id")
+      .limit(1);
+
+    // Then try the insert
     const { data, error: insertError } = await supabase
       .from("chat_rooms")
-      .insert({
-        is_group: false,
-        created_by: user.id,
-        updated_at: new Date().toISOString(),
-      })
+      .insert(insertData)
       .select()
       .single();
 
-    console.log("Insert result:", data, "Insert error:", insertError);
-
-    if (insertError) throw insertError;
+    if (insertError) {
+      console.error("Detailed insert error:", {
+        code: insertError.code,
+        message: insertError.message,
+        details: insertError.details,
+        hint: insertError.hint,
+      });
+      throw insertError;
+    }
 
     // Add participants
+    const participantsData = [
+      { room_id: data.id, user_id: userId, role: "admin" },
+      { room_id: data.id, user_id: otherUserId, role: "member" },
+    ];
+
     const { error: participantsError } = await supabase
       .from("chat_participants")
-      .insert([
-        { room_id: data.id, user_id: userId, role: "admin" },
-        { room_id: data.id, user_id: otherUserId, role: "member" },
-      ]);
+      .insert(participantsData);
 
-    if (participantsError) throw participantsError;
+    if (participantsError) {
+      console.error("Error adding participants:", participantsError);
+      throw participantsError;
+    }
 
     // Fetch participants in a separate query if needed
-    const { data: participants } = await supabase
+    const { data: participants, error: fetchParticipantsError } = await supabase
       .from("chat_participants")
       .select("user_id, role")
       .eq("room_id", data.id);
+
+    if (fetchParticipantsError) {
+      console.error("Error fetching participants:", fetchParticipantsError);
+      throw fetchParticipantsError;
+    }
 
     return { success: true, data: { ...data, participants } };
   } catch (error) {
@@ -226,6 +351,7 @@ export const getChatMessages = async (roomId, { limit = 50, before } = {}) => {
           sender:sender_id (
             id,
             username
+            
           )
         )
       `
@@ -258,17 +384,43 @@ export const sendMessage = async (
   replyTo = null
 ) => {
   try {
+    // Get the authenticated user's ID
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError) {
+      console.error("Auth error:", authError);
+      throw new Error("Failed to get authenticated user");
+    }
+
+    // Verify that the passed userId matches the authenticated user
+    if (userId !== user.id) {
+      throw new Error(
+        "User ID mismatch: passed ID does not match authenticated user"
+      );
+    }
+
+    // First, verify we can read from the table
+    const { data: testRead, error: testReadError } = await supabase
+      .from("chat_messages")
+      .select("id")
+      .limit(1);
+
+    const messageData = {
+      room_id: roomId,
+      sender_id: userId,
+      content,
+      type,
+      metadata,
+      reply_to: replyTo,
+      created_at: new Date().toISOString(),
+    };
+
     const { data, error } = await supabase
       .from("chat_messages")
-      .insert({
-        room_id: roomId,
-        sender_id: userId,
-        content,
-        type,
-        metadata,
-        reply_to: replyTo,
-        created_at: new Date().toISOString(),
-      })
+      .insert(messageData)
       .select(
         `
         *,
@@ -292,7 +444,15 @@ export const sendMessage = async (
       )
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Detailed insert error:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw error;
+    }
 
     // Update room's updated_at
     await supabase
@@ -336,6 +496,190 @@ export const removeParticipant = async (roomId, userId) => {
     return { success: true };
   } catch (error) {
     console.error("Error removing participant:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Get unread count for a chat room
+export const getUnreadCount = async (roomId, userId) => {
+  try {
+    const { data, error } = await supabase.rpc("get_unread_count", {
+      room_id: roomId,
+      user_id: userId,
+    });
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error("Error getting unread count:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Mark messages as read
+export const markMessagesAsRead = async (roomId, userId) => {
+  try {
+    const { error } = await supabase.rpc("mark_messages_as_read", {
+      room_id: roomId,
+      user_id: userId,
+    });
+    if (error) throw error;
+    // After marking as read, unread should be 0
+    return { success: true, unread: 0 };
+  } catch (error) {
+    console.error("Error marking messages as read:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Update typing status
+export const updateTypingStatus = async (roomId, userId, isTyping) => {
+  try {
+    const { error } = await supabase.from("typing_status").upsert(
+      {
+        room_id: roomId,
+        user_id: userId,
+        is_typing: isTyping,
+        last_typed_at: new Date().toISOString(),
+      },
+      { onConflict: ["room_id", "user_id"] }
+    );
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating typing status:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Get typing users
+export const getTypingUsers = async (roomId) => {
+  try {
+    const { data, error } = await supabase.rpc("get_typing_users", {
+      room_id: roomId,
+    });
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error("Error getting typing users:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Upload file to storage
+export const uploadFile = async (file, type, roomId, userId) => {
+  try {
+    const fileExt = file.uri.split(".").pop();
+    const fileName = `${Date.now()}_${Math.floor(
+      Math.random() * 10000
+    )}.${fileExt}`;
+    const filePath = `${roomId}/${userId}/${type}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("chat-attachments")
+      .upload(filePath, {
+        uri: file.uri,
+        type: file.type,
+        name: fileName,
+      });
+
+    if (uploadError) throw uploadError;
+
+    // Only return the file path (not the public URL)
+    return { success: true, data: { path: filePath } };
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Get a signed URL for a file path (for private buckets)
+export const getSignedUrl = async (filePath) => {
+  try {
+    console.log("Getting signed URL for path:", filePath);
+    const { data, error } = await supabase.storage
+      .from("chat-attachments")
+      .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
+
+    if (error) {
+      console.error("Error getting signed URL:", error);
+      throw error;
+    }
+
+    console.log("Signed URL response:", data);
+    return { success: true, url: data.signedUrl };
+  } catch (error) {
+    console.error("Error getting signed URL:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Send attachment message
+export const sendAttachment = async (roomId, userId, file, type) => {
+  try {
+    // First upload the file
+    const {
+      success: uploadSuccess,
+      data: uploadData,
+      error: uploadError,
+    } = await uploadFile(file, type, roomId, userId);
+    if (!uploadSuccess) throw uploadError;
+
+    // Prepare metadata
+    let metadata = {
+      fileName: file.name,
+      fileSize: file.size,
+      mimeType: file.type,
+      duration: file.duration, // for audio/video
+      thumbnail: file.thumbnail, // for video
+    };
+
+    // Add width/height for images
+    if (type === "image" && file.uri) {
+      try {
+        const { width, height } = await ImageManipulator.manipulateAsync(
+          file.uri,
+          [],
+          { base64: false }
+        );
+        if (width && height) {
+          metadata.width = width;
+          metadata.height = height;
+        }
+      } catch (e) {
+        // Ignore if we can't get dimensions
+      }
+    }
+    // Add width/height for videos
+    if (type === "video" && file.uri) {
+      try {
+        const { width, height } = await VideoThumbnails.getThumbnailAsync(
+          file.uri
+        );
+        if (width && height) {
+          metadata.width = width;
+          metadata.height = height;
+        }
+      } catch (e) {
+        // Ignore if we can't get dimensions
+      }
+    }
+
+    // Then send the message with the file path (not URL)
+    const { success, error } = await sendMessage(
+      roomId,
+      userId,
+      uploadData.path, // store the file path
+      type,
+      metadata
+    );
+
+    if (!success) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending attachment:", error);
     return { success: false, error: error.message };
   }
 };

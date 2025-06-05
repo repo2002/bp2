@@ -1,22 +1,43 @@
 import NewChatModal from "@/components/chats/NewChatModal";
+import { useAuth } from "@/contexts/AuthContext";
 import { SearchProvider, useChatSearch } from "@/contexts/SearchContext";
 import { useTheme } from "@/hooks/theme";
+import { getChatById } from "@/services/chatService";
 import { Ionicons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
-import { useState } from "react";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { TouchableOpacity, useColorScheme, View } from "react-native";
-import { chatRooms } from "./dummyData";
 
 const ChatsLayout = () => {
   const theme = useTheme();
   const colorScheme = useColorScheme();
   const { setSearch } = useChatSearch();
   const [modalVisible, setModalVisible] = useState(false);
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const [currentChat, setCurrentChat] = useState(null);
+  const { user } = useAuth();
 
   const handleCreateChat = (data) => {
-    // Add to dummy data or state, then navigate
-    console.log("Create chat/group:", data);
+    // Close the modal
+    setModalVisible(false);
+    // Navigate to the new chat
+    router.push(`/chats/${data.id}`);
   };
+
+  // Fetch chat data when params change
+  useEffect(() => {
+    const fetchChatData = async () => {
+      if (params?.id) {
+        const { success, data } = await getChatById(params.id);
+        if (success) {
+          setCurrentChat(data);
+        }
+      }
+    };
+
+    fetchChatData();
+  }, [params?.id]);
 
   return (
     <>
@@ -83,15 +104,14 @@ const ChatsLayout = () => {
         />
         <Stack.Screen
           name="[id]"
-          options={({ route }) => {
-            const roomId = route.params?.id;
-            const room = chatRooms.find((r) => r.id === roomId);
-            return {
-              headerShown: true,
-              headerTitle: room ? room.name : "Chat",
-              headerLargeTitle: false,
-              headerBackButtonDisplayMode: "minimal",
-            };
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="[id]/chat-details"
+          options={{
+            headerShown: false,
           }}
         />
       </Stack>

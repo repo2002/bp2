@@ -5,7 +5,13 @@ import BottomSheet, {
   BottomSheetView,
 } from "@gorhom/bottom-sheet";
 import * as Haptics from "expo-haptics";
-import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+} from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -25,6 +31,7 @@ const BottomSheetModal = forwardRef(
       showConfirm = false,
       children,
       enablePanDownToClose = true,
+      visible,
       ...props
     },
     ref
@@ -56,6 +63,14 @@ const BottomSheetModal = forwardRef(
       if (onConfirm) onConfirm();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }, [onConfirm]);
+
+    useEffect(() => {
+      if (visible) {
+        sheetRef.current?.expand();
+      } else {
+        sheetRef.current?.close();
+      }
+    }, [visible]);
 
     return (
       <BottomSheet

@@ -1,3 +1,4 @@
+import defaultAvatar from "@/assets/images/default-avatar.png";
 import { AttachmentOverlay } from "@/components/chats/AttachmentOverlay";
 import {
   AttachmentButton,
@@ -6,29 +7,54 @@ import {
   CustomComposer,
   CustomInputToolbar,
   CustomSend,
-  getGroupMemberColor,
   MediaPickerButton,
   TypingIndicator,
   VoiceNoteButton,
 } from "@/components/chats/ChatComponents";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/theme";
-import { useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import useMessagesSubscription from "@/hooks/useMessagesSubscription";
+import useParticipantsSubscription from "@/hooks/useParticipantsSubscription";
+import useTypingSubscription from "@/hooks/useTypingSubscription";
+import {
+  getChatById,
+  getTypingUsers,
+  markMessagesAsRead,
+  sendAttachment,
+  sendMessage,
+  updateTypingStatus,
+} from "@/services/chatService";
+import { Ionicons } from "@expo/vector-icons";
+import { Audio } from "expo-audio";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { GiftedChat } from "react-native-gifted-chat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { chatMessages, chatRooms, users } from "./dummyData";
-
-const CURRENT_USER_ID = "user-1-uuid";
 
 export default function ChatScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [isAttachmentVisible, setIsAttachmentVisible] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [roomId, setRoomId] = useState(null);
   const [inputText, setInputText] = useState("");
+  const [room, setRoom] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [unread, setUnread] = useState(0);
+  const listRef = useRef();
+  const router = useRouter();
 
   // Get params safely
   const params = useLocalSearchParams();
@@ -40,75 +66,378 @@ export default function ChatScreen() {
     }
   }, [params?.id]);
 
-  // Find the room
-  const room = useMemo(() => {
-    if (!roomId) return null;
-    return chatRooms.find((r) => r.id === roomId);
-  }, [roomId]);
+  // Named function for fetching room and messages (only used on initial load or navigation)
+  const fetchRoomAndMessages = async () => {
+    if (!roomId || !user?.id) return;
+    try {
+      setIsLoading(true);
+      const { success, data, error } = await getChatById(roomId, user.id);
 
-  // Get messages for this room, newest first
-  const messages = useMemo(() => {
-    if (!roomId) return [];
-    return chatMessages
-      .filter((msg) => msg.room_id === roomId)
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      .map((msg) => {
-        const sender = users.find((u) => u.id === msg.sender_id);
-        const replyTo = msg.reply_to
-          ? chatMessages.find((m) => m.id === msg.reply_to)
-          : null;
-        const replyToSender = replyTo
-          ? users.find((u) => u.id === replyTo.sender_id)
-          : null;
-
-        return {
-          _id: msg.id,
-          text: msg.content,
-          createdAt: new Date(msg.created_at),
-          user: {
-            _id: sender.id,
-            name: sender.first_name + " " + sender.last_name,
-            avatar: sender.avatar,
-          },
-          reply_to: replyTo
-            ? {
-                _id: replyTo.id,
-                text: replyTo.content,
-                user: {
-                  _id: replyToSender.id,
-                  name:
-                    replyToSender.first_name + " " + replyToSender.last_name,
-                },
-              }
-            : null,
-          metadata: msg.metadata,
-        };
-      });
-  }, [roomId]);
-
-  const [chatMsgs, setChatMsgs] = useState(messages);
-
-  // Update loading state when room is found
-  useEffect(() => {
-    if (room) {
+      if (success) {
+        setRoom(data);
+        setUnread(data.unread || 0);
+        // Transform messages to GiftedChat format and sort newest first
+        const transformedMessages = data.messages
+          .map((msg) => ({
+            _id: msg.id,
+            text: msg.content,
+            type: msg.type || "text",
+            createdAt: new Date(msg.created_at),
+            user: {
+              _id: msg.sender.id,
+              name:
+                `${msg.sender.first_name} ${msg.sender.last_name}`.trim() ||
+                msg.sender.username,
+              avatar: msg.sender.image_url || defaultAvatar,
+            },
+            metadata: msg.metadata,
+          }))
+          .sort((a, b) => b.createdAt - a.createdAt); // Newest first
+        setMessages(transformedMessages);
+      } else {
+        console.error("Error fetching chat:", error);
+      }
+    } catch (err) {
+      console.error("Error:", err);
+    } finally {
       setIsLoading(false);
     }
-  }, [room]);
+  };
 
+  // Fetch room and messages on initial load or navigation
   useEffect(() => {
-    setChatMsgs(messages);
-  }, [messages]);
+    fetchRoomAndMessages();
+  }, [roomId, user?.id]);
 
-  const onSend = useCallback((newMessages = []) => {
-    setChatMsgs((previousMessages) =>
-      GiftedChat.append(previousMessages, newMessages)
+  // Incrementally update messages on real-time events
+  useMessagesSubscription(roomId, (payload) => {
+    if (payload.eventType === "INSERT") {
+      const msg = payload.new;
+      setMessages((prev) => [
+        {
+          _id: msg.id,
+          text: msg.content,
+          type: msg.type || "text",
+          createdAt: new Date(msg.created_at),
+          user: {
+            _id: msg.sender_id,
+            name: msg.sender_name || "Unknown",
+            avatar: msg.sender_image_url || defaultAvatar,
+          },
+          metadata: msg.metadata,
+        },
+        ...prev,
+      ]);
+    }
+    // Optionally handle UPDATE and DELETE events here
+  });
+
+  // You can keep participant subscription as a refetch for now
+  useParticipantsSubscription(roomId, fetchRoomAndMessages);
+
+  // Mark messages as read when viewing the chat
+  useEffect(() => {
+    if (roomId && user?.id) {
+      markMessagesAsRead(roomId, user.id).then(() => setUnread(0));
+    }
+  }, [roomId, user?.id]);
+
+  const onSend = useCallback(
+    async (newMessages = []) => {
+      if (!user?.id || !roomId) return;
+
+      try {
+        const message = newMessages[0];
+        const { success, error } = await sendMessage(
+          roomId,
+          user.id,
+          message.text,
+          "text",
+          message.metadata
+        );
+
+        if (!success) {
+          console.error("Error sending message:", error);
+        }
+      } catch (err) {
+        console.error("Error:", err);
+      }
+    },
+    [roomId, user?.id]
+  );
+
+  const handleAttachment = useCallback(
+    async (type) => {
+      if (!user?.id || !roomId) return;
+      try {
+        let result;
+        switch (type) {
+          case "image": {
+            const { status } =
+              await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== "granted") {
+              alert(
+                "Sorry, we need camera roll permissions to make this work!"
+              );
+              return;
+            }
+            result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              quality: 0.8,
+            });
+            if (!result.canceled) {
+              const asset = result.assets[0];
+              const { success, error } = await sendAttachment(
+                roomId,
+                user.id,
+                {
+                  uri: asset.uri,
+                  type: asset.type || "image/jpeg",
+                  name: asset.fileName || "image.jpg",
+                  size: asset.fileSize,
+                },
+                "image"
+              );
+              if (!success) alert("Error sending image: " + error);
+              else setIsAttachmentVisible(false);
+            }
+            break;
+          }
+          case "video": {
+            const { status } =
+              await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== "granted") {
+              alert(
+                "Sorry, we need camera roll permissions to make this work!"
+              );
+              return;
+            }
+            result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+              allowsEditing: true,
+              quality: 0.8,
+            });
+            if (!result.canceled) {
+              const asset = result.assets[0];
+              const { success, error } = await sendAttachment(
+                roomId,
+                user.id,
+                {
+                  uri: asset.uri,
+                  type: asset.type || "video/mp4",
+                  name: asset.fileName || "video.mp4",
+                  size: asset.fileSize,
+                  duration: asset.duration,
+                  thumbnail: asset.uri, // Optionally generate a thumbnail
+                },
+                "video"
+              );
+              if (!success) alert("Error sending video: " + error);
+              else setIsAttachmentVisible(false);
+            }
+            break;
+          }
+          case "camera": {
+            const { status } =
+              await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== "granted") {
+              alert("Sorry, we need camera permissions to make this work!");
+              return;
+            }
+            result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.All,
+              allowsEditing: true,
+              quality: 0.8,
+            });
+            if (!result.canceled) {
+              const asset = result.assets[0];
+              const fileType = asset.type?.startsWith("video")
+                ? "video"
+                : "image";
+              const { success, error } = await sendAttachment(
+                roomId,
+                user.id,
+                {
+                  uri: asset.uri,
+                  type:
+                    asset.type ||
+                    (fileType === "video" ? "video/mp4" : "image/jpeg"),
+                  name:
+                    asset.fileName ||
+                    (fileType === "video" ? "video.mp4" : "image.jpg"),
+                  size: asset.fileSize,
+                  duration: asset.duration,
+                  thumbnail: asset.uri,
+                },
+                fileType
+              );
+              if (!success) alert(`Error sending ${fileType}: ` + error);
+              else setIsAttachmentVisible(false);
+            }
+            break;
+          }
+          case "audio": {
+            // Request permission
+            const { status } = await Audio.requestPermissionsAsync();
+            if (status !== "granted") {
+              alert("Sorry, we need microphone permissions to make this work!");
+              return;
+            }
+            // Record audio using expo-audio
+            let recorder;
+            try {
+              recorder = new Audio.Recorder();
+              await recorder.prepareToRecordAsync({
+                android: {
+                  extension: ".m4a",
+                  outputFormat: "MPEG_4",
+                  audioEncoder: "AAC",
+                  sampleRate: 44100,
+                  numberOfChannels: 2,
+                  bitRate: 128000,
+                },
+                ios: {
+                  extension: ".m4a",
+                  audioQuality: "high",
+                  sampleRate: 44100,
+                  numberOfChannels: 2,
+                  bitRate: 128000,
+                },
+              });
+              await recorder.startAsync();
+              alert("Recording... Press OK to stop.");
+              await recorder.stopAndUnloadAsync();
+              const uri = recorder.getURI();
+              if (uri) {
+                const { success, error } = await sendAttachment(
+                  roomId,
+                  user.id,
+                  {
+                    uri,
+                    type: "audio/m4a",
+                    name: "voice.m4a",
+                  },
+                  "audio"
+                );
+                if (!success) alert("Error sending audio: " + error);
+                else setIsAttachmentVisible(false);
+              }
+            } catch (err) {
+              alert("Error recording audio: " + err.message);
+            }
+            break;
+          }
+          case "document": {
+            const result = await DocumentPicker.getDocumentAsync({
+              type: "*/*",
+              copyToCacheDirectory: true,
+              multiple: false,
+            });
+            if (result.type === "success") {
+              const { uri, mimeType, name, size } = result;
+              const { success, error } = await sendAttachment(
+                roomId,
+                user.id,
+                {
+                  uri,
+                  type: mimeType,
+                  name,
+                  size,
+                },
+                "document"
+              );
+              if (!success) alert("Error sending document: " + error);
+              else setIsAttachmentVisible(false);
+            }
+            break;
+          }
+          default:
+            alert("Unsupported attachment type: " + type);
+        }
+      } catch (error) {
+        alert("Error handling attachment: " + error.message);
+      }
+    },
+    [roomId, user?.id]
+  );
+
+  // Handle typing status
+  const handleTyping = useCallback(
+    async (isTyping) => {
+      if (!user?.id || !roomId) return;
+
+      await updateTypingStatus(roomId, user.id, isTyping);
+    },
+    [roomId, user?.id]
+  );
+
+  // Subscribe to typing status changes
+  useTypingSubscription(roomId, async () => {
+    const { success, data } = await getTypingUsers(roomId);
+    if (success) {
+      setTypingUsers(data.filter((user) => user.user_id !== user.id));
+    }
+  });
+
+  // Helper to get chat title and avatar
+  let chatTitle = "Chat";
+  let chatAvatar = defaultAvatar;
+  if (room) {
+    if (room.is_group) {
+      chatTitle = room.name || "Group";
+      chatAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+        room.name || "Group"
+      )}`;
+    } else if (Array.isArray(room.participants) && user?.id) {
+      const other = room.participants.find(
+        (p) => p.user && p.user.id !== user.id
+      );
+      if (other && other.user) {
+        const { first_name, last_name, username, image_url } = other.user;
+        chatTitle =
+          [first_name, last_name].filter(Boolean).join(" ") ||
+          username ||
+          "Chat";
+        chatAvatar = image_url || defaultAvatar;
+      }
+    }
+  }
+
+  // Handler for avatar press
+  const handleAvatarPress = () => {
+    if (room?.is_group) {
+      router.push(`/chats/${roomId}/group-details`);
+    } else {
+      router.push(`/chats/${roomId}/chat-details`);
+    }
+  };
+
+  // Render messages with red line for new messages
+  const renderMessage = (props) => {
+    const { currentMessage, previousMessage, ...rest } = props;
+    const messageIndex = messages.findIndex(
+      (m) => m._id === currentMessage._id
     );
-  }, []);
-
-  const handleAttachment = useCallback((type) => {
-    // TODO: Handle different attachment types
-    console.log("Attachment type:", type);
-  }, []);
+    // If this is the first unread message, render the red line above it
+    const isFirstUnread = unread > 0 && messageIndex === unread - 1;
+    return (
+      <>
+        {isFirstUnread && (
+          <View
+            style={{
+              height: 2,
+              backgroundColor: "red",
+              marginVertical: 8,
+              marginHorizontal: 16,
+              borderRadius: 1,
+            }}
+          />
+        )}
+        <CustomBubble {...props} theme={theme} />
+      </>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -138,13 +467,67 @@ export default function ChatScreen() {
         paddingBottom: 8,
       }}
     >
+      {/* Custom Header */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingTop: insets.top + 8,
+          paddingBottom: 8,
+          paddingHorizontal: 12,
+          backgroundColor: theme.colors.background,
+          borderBottomWidth: 0.5,
+          borderBottomColor: theme.colors.grey,
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={{ padding: 4, marginRight: 8 }}
+        >
+          <Ionicons name="chevron-back" size={28} color={theme.colors.text} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleAvatarPress}
+          style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
+        >
+          <View style={{ marginRight: 12 }}>
+            <Image
+              source={
+                typeof chatAvatar === "string"
+                  ? { uri: chatAvatar }
+                  : chatAvatar
+              }
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: theme.colors.greyLight,
+              }}
+            />
+          </View>
+          <Text
+            style={{
+              color: theme.colors.text,
+              fontSize: 18,
+              fontWeight: "bold",
+              flexShrink: 1,
+            }}
+            numberOfLines={1}
+          >
+            {chatTitle}
+          </Text>
+        </TouchableOpacity>
+      </View>
       <GiftedChat
-        messages={chatMsgs}
+        messages={messages}
         onSend={onSend}
-        user={{ _id: CURRENT_USER_ID }}
+        user={{ _id: user.id }}
         text={inputText}
-        onInputTextChanged={setInputText}
-        renderBubble={(props) => <CustomBubble {...props} theme={theme} />}
+        onInputTextChanged={(text) => {
+          setInputText(text);
+          handleTyping(text.length > 0);
+        }}
+        renderBubble={renderMessage}
         renderAvatar={(props) => <CustomAvatar {...props} theme={theme} />}
         renderInputToolbar={(props) => (
           <CustomInputToolbar
@@ -177,41 +560,14 @@ export default function ChatScreen() {
           </>
         )}
         renderFooter={() => (
-          <TypingIndicator typingUsers={typingUsers} theme={theme} />
+          <TypingIndicator
+            typingUsers={typingUsers}
+            theme={theme}
+            currentUserId={user.id}
+          />
         )}
         scrollToBottom
         renderUsernameOnMessage={room.is_group}
-        renderMessageText={(props) => {
-          const { currentMessage } = props;
-          const color = room.is_group
-            ? getGroupMemberColor(currentMessage.user._id)
-            : theme.colors.text;
-          return (
-            <View>
-              {room.is_group && (
-                <Text
-                  style={{
-                    color,
-                    fontSize: 12,
-                    marginBottom: 4,
-                  }}
-                >
-                  {currentMessage.user.name}
-                </Text>
-              )}
-              <Text
-                style={{
-                  color:
-                    currentMessage.user._id === CURRENT_USER_ID
-                      ? "white"
-                      : theme.colors.text,
-                }}
-              >
-                {currentMessage.text}
-              </Text>
-            </View>
-          );
-        }}
         listViewProps={{
           onEndReached: () => {
             // TODO: Load earlier messages

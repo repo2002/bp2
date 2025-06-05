@@ -1,5 +1,9 @@
+import { getSignedUrl } from "@/services/chatService";
 import { Ionicons } from "@expo/vector-icons";
-import { Text, TouchableOpacity, View } from "react-native";
+import * as Linking from "expo-linking";
+import { useVideoPlayer, VideoView } from "expo-video";
+import { useEffect, useState } from "react";
+import { Image, Text, TouchableOpacity, View } from "react-native";
 import {
   Avatar,
   Bubble,
@@ -44,66 +48,53 @@ const generateGroupColors = () => {
 const GROUP_COLORS = generateGroupColors();
 
 export const CustomBubble = (props) => {
-  const { theme, currentMessage, previousMessage, nextMessage } = props;
-  const isFirstInSequence =
-    !previousMessage ||
-    !previousMessage.user ||
-    !currentMessage ||
-    !currentMessage.user ||
-    previousMessage.user._id !== currentMessage.user._id;
-  const isLastInSequence =
-    !nextMessage ||
-    !nextMessage.user ||
-    !currentMessage ||
-    !currentMessage.user ||
-    nextMessage.user._id !== currentMessage.user._id;
-
+  const { theme, currentMessage } = props;
+  // Determine if this is a media message
+  const isMedia = ["image", "video"].includes(currentMessage.type);
   return (
     <Bubble
       {...props}
+      renderCustomView={(bubbleProps) => (
+        <CustomMessageContent {...bubbleProps} theme={theme} />
+      )}
       renderUsernameOnMessage={false}
       wrapperStyle={{
-        left: {
-          backgroundColor: theme.colors.cardBackground,
-          borderRadius: 16,
-          padding: 8,
-          marginLeft: isFirstInSequence ? 0 : 40,
-        },
-        right: {
-          backgroundColor: theme.colors.primary,
-          borderRadius: 16,
-          padding: 8,
-        },
+        left: isMedia
+          ? {
+              backgroundColor: "transparent",
+              borderRadius: 0,
+              padding: 0,
+              marginLeft: 0,
+            }
+          : {
+              backgroundColor: theme.colors.cardBackground,
+              borderRadius: 16,
+              padding: 8,
+              marginLeft: 0,
+            },
+        right: isMedia
+          ? {
+              backgroundColor: "transparent",
+              borderRadius: 0,
+              padding: 0,
+            }
+          : {
+              backgroundColor: theme.colors.primary,
+              borderRadius: 16,
+              padding: 8,
+            },
       }}
       textStyle={{
         left: { color: theme.colors.text },
         right: { color: "white" },
       }}
-      renderTime={() => (
-        <Text
-          style={{
-            fontSize: 10,
-            color: theme.colors.grey,
-            magrinTop: 4,
-          }}
-        >
-          {new Date(currentMessage.createdAt).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </Text>
-      )}
+      renderTime={() => null} // We'll render time manually for media
+      renderMessageText={() => null}
     />
   );
 };
 
 export const CustomAvatar = (props) => {
-  const { currentMessage, previousMessage } = props;
-  const isFirstInSequence =
-    !previousMessage || previousMessage.user._id !== currentMessage.user._id;
-
-  if (!isFirstInSequence) return null;
-
   return (
     <Avatar
       {...props}
@@ -217,27 +208,39 @@ export const AttachmentButton = ({ onPress, theme }) => {
   );
 };
 
-export const TypingIndicator = ({ typingUsers, theme }) => {
-  if (!typingUsers?.length) return null;
+export function TypingIndicator({ typingUsers = [], theme, currentUserId }) {
+  // Filter out the current user
+  const othersTyping = typingUsers.filter((u) => u.user_id !== currentUserId);
+  if (!othersTyping.length) return null;
+  // Compose names
+  const names = othersTyping
+    .map(
+      (u) =>
+        [u.first_name, u.last_name].filter(Boolean).join(" ") ||
+        u.username ||
+        "Unknown"
+    )
+    .join(", ");
   return (
     <View
       style={{
-        backgroundColor: theme.colors.cardBackground,
+        backgroundColor: theme.colors.greyLight,
+        borderRadius: 12,
         paddingHorizontal: 12,
         paddingVertical: 4,
-        borderRadius: 12,
-        marginHorizontal: 8,
+        minHeight: 24,
+        minWidth: 60,
+        alignSelf: "center",
+        marginTop: 8,
         marginBottom: 4,
       }}
     >
-      <Text style={{ color: theme.colors.grey, fontSize: 12 }}>
-        {typingUsers.length === 1
-          ? `${typingUsers[0]} is typing...`
-          : `${typingUsers.length} people are typing...`}
+      <Text style={{ color: theme.colors.text, fontSize: 14 }}>
+        {names} {othersTyping.length === 1 ? "is" : "are"} typing...
       </Text>
     </View>
   );
-};
+}
 
 export const getGroupMemberColor = (userId) => {
   // Use the user's ID to consistently assign a color
@@ -267,3 +270,231 @@ export const CustomSystemMessage = (props) => (
     textStyle={{ color: "crimson", fontWeight: "900" }}
   />
 );
+
+function CustomMessageContent({ currentMessage, theme }) {
+  const [signedUrl, setSignedUrl] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Always call the hook, but only use it for video
+  const videoPlayer = useVideoPlayer(signedUrl, (player) => {
+    if (currentMessage.type === "video") {
+      player.loop = true;
+    }
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchUrl() {
+      console.log("Message data:", {
+        type: currentMessage.type,
+        text: currentMessage.text,
+        metadata: currentMessage.metadata,
+      });
+
+      if (
+        ["image", "video", "audio", "document"].includes(currentMessage.type) &&
+        currentMessage.text &&
+        !currentMessage.text.startsWith("http")
+      ) {
+        console.log("Fetching signed URL for:", currentMessage.text);
+        setLoading(true);
+        const { success, url } = await getSignedUrl(currentMessage.text);
+        console.log("Signed URL result:", { success, url });
+        if (isMounted) {
+          setSignedUrl(success ? url : null);
+          setLoading(false);
+        }
+      } else {
+        setSignedUrl(currentMessage.text);
+      }
+    }
+    fetchUrl();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentMessage.text, currentMessage.type]);
+
+  // Calculate image dimensions with better defaults and constraints
+  let width = 200; // Default width
+  let height = 200; // Default height
+  const MAX_WIDTH = 300; // Maximum width
+  const MIN_WIDTH = 100; // Minimum width
+  const ASPECT_RATIO = 1; // Default aspect ratio
+
+  if (currentMessage.metadata) {
+    console.log("Image metadata:", currentMessage.metadata);
+
+    // Try to get dimensions from metadata
+    if (currentMessage.metadata.width && currentMessage.metadata.height) {
+      const originalWidth = currentMessage.metadata.width;
+      const originalHeight = currentMessage.metadata.height;
+      const aspectRatio = originalWidth / originalHeight;
+
+      // Calculate width while maintaining aspect ratio
+      width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, originalWidth / 6));
+      height = width / aspectRatio;
+
+      console.log("Calculated dimensions:", { width, height, aspectRatio });
+    } else if (
+      currentMessage.metadata.thumbnailWidth &&
+      currentMessage.metadata.thumbnailHeight
+    ) {
+      const thumbWidth = currentMessage.metadata.thumbnailWidth;
+      const thumbHeight = currentMessage.metadata.thumbnailHeight;
+      const aspectRatio = thumbWidth / thumbHeight;
+
+      width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, thumbWidth / 2));
+      height = width / aspectRatio;
+
+      console.log("Calculated thumbnail dimensions:", {
+        width,
+        height,
+        aspectRatio,
+      });
+    }
+  }
+
+  if (loading) {
+    return (
+      <Text style={{ color: theme?.colors?.text || "#333" }}>Loading...</Text>
+    );
+  }
+
+  // Handle attachments
+  if (currentMessage.type === "image" && signedUrl) {
+    return (
+      <View style={{ alignItems: "flex-end" }}>
+        <Image
+          source={{ uri: signedUrl }}
+          style={{
+            width,
+            height,
+            borderWidth: 1,
+            borderColor: theme?.colors?.primary,
+            borderRadius: 6,
+          }}
+          resizeMode="cover"
+        />
+        <Text
+          style={{
+            fontSize: 10,
+            color: theme.colors.grey,
+            marginTop: 2,
+            alignSelf: "flex-end",
+          }}
+        >
+          {new Date(currentMessage.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </Text>
+      </View>
+    );
+  }
+  if (currentMessage.type === "video" && signedUrl) {
+    return (
+      <View style={{ alignItems: "flex-end" }}>
+        <VideoView
+          player={videoPlayer}
+          style={{
+            width,
+            height,
+            borderWidth: 1,
+            borderColor: theme?.colors?.primary,
+            borderRadius: 6,
+          }}
+          allowsFullscreen
+          allowsPictureInPicture
+        />
+        <Text
+          style={{
+            fontSize: 10,
+            color: theme.colors.grey,
+            marginTop: 2,
+            alignSelf: "flex-end",
+          }}
+        >
+          {new Date(currentMessage.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </Text>
+      </View>
+    );
+  }
+
+  // Audio, document, and text messages remain unchanged
+  if (currentMessage.type === "audio" && signedUrl) {
+    return (
+      <TouchableOpacity
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginVertical: 4,
+        }}
+        onPress={() => Linking.openURL(signedUrl)}
+      >
+        <Ionicons
+          name="play-circle"
+          size={32}
+          color={theme?.colors?.primary || "#007AFF"}
+        />
+        <Text style={{ marginLeft: 8, color: theme?.colors?.text || "#333" }}>
+          Play audio
+        </Text>
+      </TouchableOpacity>
+    );
+  }
+  if (currentMessage.type === "document" && signedUrl) {
+    return (
+      <TouchableOpacity
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginVertical: 4,
+        }}
+        onPress={() => Linking.openURL(signedUrl)}
+      >
+        <Ionicons
+          name="document"
+          size={28}
+          color={theme?.colors?.primary || "#007AFF"}
+        />
+        <Text style={{ marginLeft: 8, color: theme?.colors?.text || "#333" }}>
+          {currentMessage.metadata?.fileName || "Document"}
+        </Text>
+      </TouchableOpacity>
+    );
+  }
+
+  // Text messages (with timestamp inside bubble)
+  if (currentMessage.text) {
+    return (
+      <>
+        <Text
+          style={{
+            color: theme?.colors?.text || "#fff",
+            fontSize: 16,
+          }}
+        >
+          {currentMessage.text}
+        </Text>
+        <Text
+          style={{
+            fontSize: 10,
+            color: theme.colors.grey,
+            marginTop: 4,
+            alignSelf: "flex-end",
+          }}
+        >
+          {new Date(currentMessage.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </Text>
+      </>
+    );
+  }
+
+  return null;
+}

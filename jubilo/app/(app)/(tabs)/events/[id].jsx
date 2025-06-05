@@ -1,5 +1,7 @@
 import Avatar from "@/components/Avatar";
 import CategoryBadge from "@/components/events/CategoryBadge";
+import EventImagesBottomSheet from "@/components/events/EventImagesBottomSheet";
+import EventQnABottomSheet from "@/components/events/EventQnABottomSheet";
 import FollowButton from "@/components/FollowButton";
 import ThemeText from "@/components/theme/ThemeText";
 import UserChip from "@/components/UserChip";
@@ -7,18 +9,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getShortContent } from "@/helpers/common";
 import { useTheme } from "@/hooks/theme";
 import { useEventFollowersSubscription } from "@/hooks/useFollowersSubscription";
+import { useEventParticipantsSubscription } from "@/hooks/useParticipantsSubscription";
+import { supabase } from "@/lib/supabase";
 import { getEventDetails, updateRSVP } from "@/services/events";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import {
-  Alert,
-  Image,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Alert, Image, StyleSheet, TouchableOpacity, View } from "react-native";
 
 export default function EventDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -31,6 +28,8 @@ export default function EventDetailsScreen() {
   const [activeTab, setActiveTab] = useState("images");
   const [actionLoading, setActionLoading] = useState(false);
   const { user } = useAuth();
+  const [imagesSheetOpen, setImagesSheetOpen] = useState(false);
+  const [qnaSheetOpen, setQnASheetOpen] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -68,6 +67,11 @@ export default function EventDetailsScreen() {
     event?.id && !event.is_private ? event.id : null,
     fetchEventDetails
   );
+  // Realtime event participants subscription
+  useEventParticipantsSubscription(
+    event?.id ? event.id : null,
+    fetchEventDetails
+  );
 
   // Join/Leave handlers
   const handleJoin = async () => {
@@ -90,7 +94,13 @@ export default function EventDetailsScreen() {
         onPress: async () => {
           setActionLoading(true);
           try {
-            await updateRSVP(event.id, "left");
+            // Delete the participant row from event_participants
+            const { error } = await supabase
+              .from("event_participants")
+              .delete()
+              .eq("event_id", event.id)
+              .eq("user_id", user.id);
+            if (error) throw error;
             await fetchEventDetails();
           } catch (e) {
             Alert.alert("Error", e.message || "Failed to leave event");
@@ -141,10 +151,9 @@ export default function EventDetailsScreen() {
     isOwner ||
     event.permissions?.isParticipant ||
     event.permissions?.isInvited;
-  // TODO: Add logic for RSVP/accept/decline/follow/unfollow
 
   return (
-    <ScrollView
+    <View
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       {/* Image Cover + Top Buttons */}
@@ -225,6 +234,20 @@ export default function EventDetailsScreen() {
       {/* Title & Host */}
       <View style={styles.titleRow}>
         <ThemeText style={styles.title}>{event.title}</ThemeText>
+        {/* Followers Row */}
+        {isPublic && (
+          <View style={styles.followersRow}>
+            <Ionicons
+              name="people-outline"
+              size={20}
+              color={theme.colors.primary}
+            />
+            <ThemeText style={styles.followersCount}>
+              {event.followers_count?.[0]?.count || 0} follower
+              {event.followers_count?.[0]?.count === 1 ? "" : "s"}
+            </ThemeText>
+          </View>
+        )}
       </View>
 
       {/* Host Card */}
@@ -234,6 +257,40 @@ export default function EventDetailsScreen() {
       >
         <UserChip user={event.creator} size={40} />
       </TouchableOpacity>
+
+      {/* Accept/Decline for private events */}
+      {!isPublic && event.permissions?.isInvited && (
+        <View style={styles.actionButtonsRow}>
+          <TouchableOpacity
+            style={[
+              styles.acceptBtn,
+              { backgroundColor: theme.colors.success },
+            ]}
+            onPress={() => {
+              // TODO: Implement accept invite logic
+            }}
+            disabled={actionLoading}
+          >
+            <ThemeText style={[styles.actionBtnText, { color: "#fff" }]}>
+              Accept
+            </ThemeText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.declineBtn,
+              { backgroundColor: theme.colors.error, marginLeft: 8 },
+            ]}
+            onPress={() => {
+              // TODO: Implement decline invite logic
+            }}
+            disabled={actionLoading}
+          >
+            <ThemeText style={[styles.actionBtnText, { color: "#fff" }]}>
+              Decline
+            </ThemeText>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Description */}
       <ThemeText style={styles.description}>
@@ -288,21 +345,6 @@ export default function EventDetailsScreen() {
           </ThemeText>
         </TouchableOpacity>
       )}
-
-      {/* Followers Row */}
-      {isPublic && (
-        <View style={styles.followersRow}>
-          <Ionicons
-            name="people-outline"
-            size={20}
-            color={theme.colors.primary}
-          />
-          <ThemeText style={styles.followersCount}>
-            {event.followers_count?.[0]?.count || 0} follower
-            {event.followers_count?.[0]?.count === 1 ? "" : "s"}
-          </ThemeText>
-        </View>
-      )}
       {/* Join/Going and Follow Buttons Row */}
       <View style={styles.actionButtonsRow}>
         {/* Join/Going button */}
@@ -344,133 +386,66 @@ export default function EventDetailsScreen() {
             isFollowing={event.permissions?.isFollowing}
             onFollow={fetchEventDetails}
             onUnfollow={fetchEventDetails}
-            style={styles.actionButton}
           />
         )}
       </View>
 
-      {/* Accept/Decline for private events */}
-      {!isPublic && event.permissions?.isInvited && (
-        <View style={styles.actionButtonsRow}>
-          <TouchableOpacity
-            style={[
-              styles.acceptBtn,
-              { backgroundColor: theme.colors.success },
-            ]}
-            onPress={() => {
-              // TODO: Implement accept invite logic
-            }}
-            disabled={actionLoading}
-          >
-            <ThemeText style={[styles.actionBtnText, { color: "#fff" }]}>
-              Accept
-            </ThemeText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.declineBtn,
-              { backgroundColor: theme.colors.error, marginLeft: 8 },
-            ]}
-            onPress={() => {
-              // TODO: Implement decline invite logic
-            }}
-            disabled={actionLoading}
-          >
-            <ThemeText style={[styles.actionBtnText, { color: "#fff" }]}>
-              Decline
-            </ThemeText>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Tabs */}
-      <View style={styles.tabsRow}>
+      {/* Images & Q&A Buttons */}
+      <View style={styles.sheetButtonsRow}>
         <TouchableOpacity
-          onPress={() => setActiveTab("images")}
           style={[
-            styles.tab,
-            activeTab === "images" && {
-              borderBottomColor: theme.colors.primary,
-              borderBottomWidth: 2,
-            },
+            styles.sheetButton,
+            { backgroundColor: theme.colors.cardBackground },
           ]}
+          onPress={() => setImagesSheetOpen(true)}
+          activeOpacity={0.85}
         >
-          <MaterialCommunityIcons
-            name="image-multiple-outline"
-            size={20}
-            color={
-              activeTab === "images" ? theme.colors.primary : theme.colors.text
-            }
+          <Ionicons
+            name="image-outline"
+            size={22}
+            color={theme.colors.primary}
           />
-          <ThemeText
-            style={{
-              color:
-                activeTab === "images"
-                  ? theme.colors.primary
-                  : theme.colors.text,
-              marginLeft: 6,
-            }}
-          >
-            Images
+          <ThemeText style={styles.sheetButtonText}>
+            {event.images?.length ? `${event.images.length} Images` : "Images"}
           </ThemeText>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => setActiveTab("qna")}
           style={[
-            styles.tab,
-            activeTab === "qna" && {
-              borderBottomColor: theme.colors.primary,
-              borderBottomWidth: 2,
-            },
+            styles.sheetButton,
+            { backgroundColor: theme.colors.cardBackground },
           ]}
+          onPress={() => setQnASheetOpen(true)}
+          activeOpacity={0.85}
         >
-          <MaterialCommunityIcons
-            name="comment-question-outline"
-            size={20}
-            color={
-              activeTab === "qna" ? theme.colors.primary : theme.colors.text
-            }
+          <Ionicons
+            name="chatbubble-ellipses-outline"
+            size={22}
+            color={theme.colors.primary}
           />
-          <ThemeText
-            style={{
-              color:
-                activeTab === "qna" ? theme.colors.primary : theme.colors.text,
-              marginLeft: 6,
-            }}
-          >
-            Q&A
+          <ThemeText style={styles.sheetButtonText}>
+            {event.questions?.length ? `${event.questions.length} Q&A` : "Q&A"}
           </ThemeText>
         </TouchableOpacity>
       </View>
-      {/* Tab Content */}
-      {activeTab === "images" ? (
-        <View style={{ minHeight: 120, marginBottom: 16 }}>
-          {/* TODO: Images grid here */}
-          <ThemeText
-            style={{
-              color: theme.colors.textSecondary,
-              textAlign: "center",
-              marginTop: 24,
-            }}
-          >
-            Images grid coming soon
-          </ThemeText>
-        </View>
-      ) : (
-        <View style={{ minHeight: 120, marginBottom: 16 }}>
-          {/* TODO: Q&A grid here */}
-          <ThemeText
-            style={{
-              color: theme.colors.textSecondary,
-              textAlign: "center",
-              marginTop: 24,
-            }}
-          >
-            Q&A coming soon
-          </ThemeText>
-        </View>
-      )}
-    </ScrollView>
+
+      {/* Images BottomSheet */}
+      <EventImagesBottomSheet
+        eventId={event.id}
+        visible={imagesSheetOpen}
+        onClose={() => setImagesSheetOpen(false)}
+        images={event.images}
+        canUpload={event.permissions?.canUploadImages}
+      />
+
+      {/* Q&A BottomSheet */}
+      <EventQnABottomSheet
+        eventId={event.id}
+        visible={qnaSheetOpen}
+        onClose={() => setQnASheetOpen(false)}
+        canAsk={event.permissions?.canAnswerQnA}
+        onQuestionAdded={fetchEventDetails}
+      />
+    </View>
   );
 }
 
@@ -554,17 +529,32 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   participantsCount: { marginLeft: 12, fontSize: 16, color: "#888" },
-  tabsRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-    marginTop: 16,
-  },
-  tab: {
+  sheetButtonsRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    justifyContent: "center",
+    gap: 20,
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  sheetButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 12,
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    marginHorizontal: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  sheetButtonText: {
+    marginLeft: 10,
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#333",
   },
   acceptBtn: {
     paddingHorizontal: 16,

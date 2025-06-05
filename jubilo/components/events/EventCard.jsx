@@ -19,10 +19,17 @@ export default function EventCard({
   const userId = user?.id;
   const router = useRouter();
 
-  const myParticipant = event.participants?.find((p) => p.user?.id === userId);
-  const myStatus = myParticipant?.status;
-
-  const isFollowing = event.followers?.some((f) => f.user_id === userId);
+  // Permissions logic (use event.permissions if available, else fallback)
+  const isOwner = event.permissions?.isOwner || event.creator_id === userId;
+  const isPublic = event.is_private === false;
+  const isParticipant =
+    event.permissions?.isParticipant ||
+    event.participants?.some(
+      (p) => p.user?.id === userId && p.status === "going"
+    );
+  const isFollowing =
+    event.permissions?.isFollowing ||
+    event.followers?.some((f) => f.user_id === userId || f.user?.id === userId);
 
   const avatars = event.participants
     ?.map((p) => p.user)
@@ -130,60 +137,7 @@ export default function EventCard({
           </ThemeText>
         </View>
         <View style={styles.actionsRow}>
-          {myStatus ? (
-            <ThemeText
-              color="white"
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor: theme.colors.primary,
-                },
-              ]}
-            >
-              {myStatus.charAt(0).toUpperCase() + myStatus.slice(1)}
-            </ThemeText>
-          ) : (
-            <TouchableOpacity
-              style={[
-                styles.rsvpButton,
-                { backgroundColor: theme.colors.primary },
-              ]}
-              onPress={() => onRSVP?.(event)}
-              activeOpacity={0.8}
-            >
-              <ThemeText color="white" style={{ fontWeight: "bold" }}>
-                Join
-              </ThemeText>
-            </TouchableOpacity>
-          )}
-
-          {isFollowing ? (
-            <TouchableOpacity
-              style={[
-                styles.followButton,
-                { backgroundColor: theme.colors.error },
-              ]}
-              onPress={() => onUnfollow?.(event)}
-              activeOpacity={0.8}
-            >
-              <ThemeText color="white" style={{ fontWeight: "bold" }}>
-                Unfollow
-              </ThemeText>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[
-                styles.followButton,
-                { backgroundColor: theme.colors.primary },
-              ]}
-              onPress={() => onFollow?.(event)}
-              activeOpacity={0.8}
-            >
-              <ThemeText color="white" style={{ fontWeight: "bold" }}>
-                Follow
-              </ThemeText>
-            </TouchableOpacity>
-          )}
+          {/* No Join/Going or Follow buttons here anymore */}
         </View>
       </View>
     </TouchableOpacity>

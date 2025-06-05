@@ -1,6 +1,7 @@
+import ThemeText from "@/components/theme/ThemeText";
 import { useTheme } from "@/hooks/theme";
 import { Ionicons } from "@expo/vector-icons";
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 const AttachmentOption = ({ icon, label, onPress }) => {
   const theme = useTheme();
@@ -19,63 +20,111 @@ const AttachmentOption = ({ icon, label, onPress }) => {
   );
 };
 
-export const AttachmentOverlay = ({ visible, onClose, onSelect }) => {
+export function AttachmentOverlay({ visible, onClose, onSelect }) {
   const theme = useTheme();
-
-  const options = [
-    { icon: "camera", label: "Camera", type: "camera" },
-    { icon: "images", label: "Gallery", type: "gallery" },
-    { icon: "document", label: "Document", type: "document" },
-    { icon: "location", label: "Location", type: "location" },
-    { icon: "person", label: "Contact", type: "contact" },
-    { icon: "stats-chart", label: "Poll", type: "poll" },
-    { icon: "list", label: "ToDo", type: "todo" },
-  ];
-
+  if (!visible) return null;
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+    <View
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: theme.colors.cardBackground,
+        borderTopLeftRadius: 16,
+        borderTopRightRadius: 16,
+        padding: 24,
+        shadowColor: "#000",
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: -2 },
+        elevation: 8,
+        zIndex: 100,
+      }}
     >
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 16,
+        }}
       >
-        <View
-          style={[
-            styles.container,
-            { backgroundColor: theme.colors.cardBackground },
-          ]}
-        >
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>
-              Add Attachment
-            </Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.optionsContainer}>
-            {options.map((option) => (
-              <AttachmentOption
-                key={option.type}
-                icon={option.icon}
-                label={option.label}
-                onPress={() => {
-                  onSelect(option.type);
-                  onClose();
-                }}
-              />
-            ))}
-          </View>
-        </View>
-      </TouchableOpacity>
-    </Modal>
+        <ThemeText style={{ fontWeight: "bold", fontSize: 18 }}>
+          Send Attachment
+        </ThemeText>
+        <Ionicons
+          name="close"
+          color={theme.colors.text}
+          size={20}
+          onPress={onClose}
+        />
+      </View>
+
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+        }}
+      >
+        <AttachmentButton
+          label="Image"
+          icon="image"
+          onPress={() => onSelect("image")}
+        />
+        <AttachmentButton
+          label="Video"
+          icon="videocam"
+          onPress={() => onSelect("video")}
+        />
+        <AttachmentButton
+          label="Camera"
+          icon="camera"
+          onPress={() => onSelect("camera")}
+        />
+        <AttachmentButton
+          label="Voice"
+          icon="mic"
+          onPress={() => onSelect("audio")}
+        />
+        <AttachmentButton
+          label="Document"
+          icon="document"
+          onPress={() => onSelect("document")}
+        />
+      </View>
+    </View>
   );
-};
+}
+
+function AttachmentButton({ label, icon, onPress }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        margin: 8,
+        width: 72,
+      }}
+    >
+      <View
+        style={{
+          backgroundColor: "#f3f3f3",
+          borderRadius: 24,
+          width: 48,
+          height: 48,
+          justifyContent: "center",
+          alignItems: "center",
+          marginBottom: 4,
+        }}
+      >
+        <Ionicons name={icon} size={28} color="#333" />
+      </View>
+      <ThemeText style={{ fontSize: 13 }}>{label}</ThemeText>
+    </TouchableOpacity>
+  );
+}
 
 const styles = StyleSheet.create({
   overlay: {

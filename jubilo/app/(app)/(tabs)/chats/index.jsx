@@ -1,10 +1,13 @@
+import defaultAvatar from "@/assets/images/default-avatar.png";
 import EmptyState from "@/components/EmptyState";
 import ThemeText from "@/components/theme/ThemeText";
 import { useAuth } from "@/contexts/AuthContext";
 import { useChatSearch } from "@/contexts/SearchContext";
 import { useTheme } from "@/hooks/theme";
+import useRoomSubscription from "@/hooks/useRoomSubscription";
 import { supabase } from "@/lib/supabase";
-import { getUserChats } from "@/services/chatService";
+import { getUnreadCount, getUserChats } from "@/services/chatService";
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -28,6 +31,14 @@ export default function ChatsIndex() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
+  const handleCreateChat = useCallback(
+    (newChat) => {
+      // Refresh the chat list to include the new chat
+      fetchChats();
+    },
+    [fetchChats]
+  );
+
   const fetchChats = useCallback(async () => {
     if (!user?.id) return;
 
@@ -36,49 +47,66 @@ export default function ChatsIndex() {
       const { success, data, error } = await getUserChats(user.id);
 
       if (success) {
-        const formattedRooms = data.map((room) => {
-          const lastMsg = room.last_message?.[0];
-          const otherParticipant = room.participants?.find(
-            (p) => p.user.id !== user.id
-          );
+        const formattedRooms = await Promise.all(
+          data.map(async (room) => {
+            const lastMsg =
+              room.last_message && room.last_message.length > 0
+                ? room.last_message[0]
+                : null;
+            // For direct chats, find the other participant
+            const otherParticipant = room.participants?.find(
+              (p) => p.user && p.user.id !== user.id
+            );
 
-          // Compose display name for the other participant
-          let participantName = null;
-          if (otherParticipant) {
-            const { first_name, last_name, username } = otherParticipant.user;
-            participantName = [first_name, last_name].filter(Boolean).join(" ");
-            if (!participantName) participantName = username;
-          }
+            // Compose display name for the other participant
+            let participantName = null;
+            if (otherParticipant && otherParticipant.user) {
+              const { first_name, last_name, username } = otherParticipant.user;
+              participantName = [first_name, last_name]
+                .filter(Boolean)
+                .join(" ");
+              if (!participantName) participantName = username || "Unknown";
+            }
 
-          // Compose display name for the last message sender
-          let lastMsgSender = null;
-          if (lastMsg?.sender) {
-            const { first_name, last_name, username } = lastMsg.sender;
-            lastMsgSender = [first_name, last_name].filter(Boolean).join(" ");
-            if (!lastMsgSender) lastMsgSender = username;
-          }
+            // Compose display name for the last message sender
+            let lastMsgSender = null;
+            if (lastMsg?.sender) {
+              const { first_name, last_name, username } = lastMsg.sender;
+              lastMsgSender = [first_name, last_name].filter(Boolean).join(" ");
+              if (!lastMsgSender) lastMsgSender = username || "Unknown";
+            }
 
-          return {
-            id: room.id,
-            name: room.is_group ? room.name : participantName,
-            is_group: room.is_group,
-            avatar: room.is_group
+            // Always show a fallback avatar
+            let avatar = room.is_group
               ? `https://ui-avatars.com/api/?name=${encodeURIComponent(
                   room.name
                 )}`
-              : otherParticipant?.user.image_url,
-            lastMsg: lastMsg
-              ? {
-                  text: lastMsg.content,
-                  sender: lastMsgSender,
-                  createdAt: lastMsg.created_at,
-                  type: lastMsg.type,
-                }
-              : null,
-            unread: 0, // TODO: Implement unread count
-            participants: room.participants,
-          };
-        });
+              : otherParticipant?.user?.image_url
+              ? otherParticipant.user.image_url
+              : defaultAvatar;
+
+            // Get unread count
+            const { success: unreadSuccess, data: unreadCount } =
+              await getUnreadCount(room.id, user.id);
+
+            return {
+              id: room.id,
+              name: room.is_group ? room.name : participantName,
+              is_group: room.is_group,
+              avatar,
+              lastMsg: lastMsg
+                ? {
+                    text: lastMsg.content,
+                    sender: lastMsgSender,
+                    createdAt: lastMsg.created_at,
+                    type: lastMsg.type,
+                  }
+                : null,
+              unread: unreadSuccess ? unreadCount : 0,
+              participants: room.participants,
+            };
+          })
+        );
 
         setRooms(formattedRooms);
       } else {
@@ -122,7 +150,7 @@ export default function ChatsIndex() {
   }, [fetchChats]);
 
   const filteredRooms = rooms.filter((room) =>
-    room.name.toLowerCase().includes(search.toLowerCase())
+    room?.name?.toLowerCase().includes(search?.toLowerCase() || "")
   );
 
   const renderConversation = ({ item }) => (
@@ -131,9 +159,10 @@ export default function ChatsIndex() {
       style={[styles.conversationCard, { borderColor: theme.colors.text }]}
     >
       <Image
-        source={{ uri: item.avatar }}
+        source={
+          typeof item.avatar === "string" ? { uri: item.avatar } : item.avatar // this will be the local image if not a string
+        }
         style={styles.avatar}
-        defaultSource={require("@/assets/images/default-avatar.png")}
       />
       <View style={styles.conversationInfo}>
         <View style={styles.conversationHeader}>
@@ -154,7 +183,7 @@ export default function ChatsIndex() {
                 {item.lastMsg.sender}:
               </ThemeText>
             )}
-            <ThemeText color={theme.colors.greyDark} numberOfLines={1}>
+            <ThemeText color={theme.colors.grey} numberOfLines={1}>
               {item.lastMsg?.type === "text"
                 ? item.lastMsg.text
                 : item.lastMsg?.type === "image"
@@ -180,6 +209,17 @@ export default function ChatsIndex() {
         </View>
       </View>
     </TouchableOpacity>
+  );
+
+  useRoomSubscription(fetchChats);
+  // Optionally, subscribe to all participants/messages changes for all rooms:
+  // useParticipantsSubscription(null, fetchChats);
+  // useMessagesSubscription(null, fetchChats);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchChats();
+    }, [fetchChats])
   );
 
   if (loading && !refreshing) {
