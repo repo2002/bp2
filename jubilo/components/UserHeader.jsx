@@ -66,7 +66,7 @@ export default function UserHeader({ user }) {
               {user?.first_name} {user?.last_name}
             </ThemeText>
           </View>
-          <View style={{ flexDirection: "row", gap: 16 }}>
+          <View style={{ flexDirection: "row", gap: 32 }}>
             <View style={{ flexDirection: "column", gap: 4 }}>
               <ThemeText
                 color={theme.colors.grey}

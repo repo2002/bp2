@@ -1,17 +1,18 @@
 import BottomSheetModal from "@/components/BottomSheetModal";
 import EventQnA from "@/components/events/EventQnA";
-import { useRef } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import { useMemo, useRef } from "react";
+import { StyleSheet } from "react-native";
 
 export default function EventQnABottomSheet({
   eventId,
   visible,
   onClose,
   canAsk,
+  canAnswer = false,
   onQuestionAdded,
 }) {
   const sheetRef = useRef(null);
-  const snapPoints = ["80%"];
+  const snapPoints = useMemo(() => ["60%", "90%"], []);
 
   return (
     <BottomSheetModal
@@ -20,20 +21,14 @@ export default function EventQnABottomSheet({
       title="Event Q&A"
       visible={visible}
       onClose={onClose}
+      style={styles.sheetContent}
     >
-      <View style={styles.sheetContent}>
-        <View style={styles.headerRow}></View>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ flex: 1 }}
-        >
-          <EventQnA
-            eventId={eventId}
-            canAsk={canAsk}
-            onQuestionAdded={onQuestionAdded}
-          />
-        </KeyboardAvoidingView>
-      </View>
+      <EventQnA
+        eventId={eventId}
+        canAsk={canAsk}
+        canAnswer={canAnswer}
+        onQuestionAdded={onQuestionAdded}
+      />
     </BottomSheetModal>
   );
 }
@@ -42,6 +37,5 @@ const styles = StyleSheet.create({
   sheetContent: {
     flex: 1,
     padding: 0,
-    gap: 0,
   },
 });

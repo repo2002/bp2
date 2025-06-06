@@ -38,10 +38,8 @@ const RootLayout = () => {
 
   useEffect(() => {
     try {
-      console.log("Setting up auth state change listener");
       const { data: authListener } = supabase.auth.onAuthStateChange(
         (_event, session) => {
-          console.log("Auth state changed:", _event);
           if (session) {
             setAuth(session);
             updatedUserData(session?.user);
@@ -54,26 +52,19 @@ const RootLayout = () => {
       );
 
       return () => {
-        console.log("Cleaning up auth state change listener");
         authListener?.subscription?.unsubscribe();
       };
-    } catch (error) {
-      console.error("Error in auth state change setup:", error);
-    }
+    } catch (error) {}
   }, []);
 
   const updatedUserData = async (user) => {
     try {
-      console.log("Fetching user data for:", user?.id);
       let res = await getUserData(user?.id);
       if (res.success) {
         setUserData(res.data);
       } else {
-        console.error("Failed to fetch user data:", res.error);
       }
-    } catch (error) {
-      console.error("Error fetching user data:", error);
-    }
+    } catch (error) {}
   };
 
   return (

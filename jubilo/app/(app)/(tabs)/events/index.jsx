@@ -1,38 +1,35 @@
-import EventCard from "@/components/events/EventCard";
 import EventCardMedium from "@/components/events/EventCardMedium";
 import Section from "@/components/events/Section";
+import ThemeText from "@/components/theme/ThemeText";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEventList } from "@/hooks/events/useEventList";
 import { useTheme } from "@/hooks/theme";
-import {
-  filterFeaturedEvents,
-  filterNearYouEvents,
-  filterPastEvents,
-  filterPopularEvents,
-  filterRecommendedEvents,
-  filterUpcomingEvents,
-  getEvents,
-} from "@/services/events";
-import {
-  FontAwesome5,
-  Ionicons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
 
 export default function EventsIndexScreen() {
   const theme = useTheme();
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const { user } = useAuth();
   const userId = user?.id;
 
   const [userLocation, setUserLocation] = useState(null);
   const [userAddress, setUserAddress] = useState(null);
+
+  // Use the new event list hook
+  const {
+    events,
+    loading,
+    error,
+    refresh,
+    setFilters,
+    filters,
+    loadMore,
+    hasMore,
+  } = useEventList();
 
   useEffect(() => {
     (async () => {
@@ -43,6 +40,13 @@ export default function EventsIndexScreen() {
           lat: location.coords.latitude,
           lng: location.coords.longitude,
         });
+        setFilters((prev) => ({
+          ...prev,
+          location: {
+            lat: location.coords.latitude,
+            lng: location.coords.longitude,
+          },
+        }));
       }
     })();
   }, []);
@@ -51,7 +55,6 @@ export default function EventsIndexScreen() {
     if (userLocation) {
       (async () => {
         try {
-          // Use Expo Location reverse geocoding
           let [place] = await Location.reverseGeocodeAsync({
             latitude: userLocation.lat,
             longitude: userLocation.lng,
@@ -76,26 +79,6 @@ export default function EventsIndexScreen() {
     }
   }, [userLocation]);
 
-  const friendsIds = []; // TODO: fetch from your backend
-  const invitedEventIds = []; // TODO: fetch from your backend
-
-  const fetchEvents = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const { events: fetchedEvents } = await getEvents({ limit: 50 });
-      setEvents(fetchedEvents || []);
-    } catch (e) {
-      // handle error, show toast, etc.
-    } finally {
-      setRefreshing(false);
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
-
   const handleEventPress = (event) => {
     router.push({
       pathname: `/events/${event.id}`,
@@ -103,7 +86,7 @@ export default function EventsIndexScreen() {
     });
   };
 
-  if (loading) {
+  if (loading && !events.length) {
     return (
       <View
         style={[
@@ -116,22 +99,49 @@ export default function EventsIndexScreen() {
     );
   }
 
-  const featuredEvents = filterFeaturedEvents(events);
-  const upcomingEvents = filterUpcomingEvents(events);
-  const nearYouEvents = filterNearYouEvents(events, userLocation);
-  const recommendedEvents = filterRecommendedEvents(
-    events,
-    userId,
-    friendsIds,
-    invitedEventIds
+  if (error) {
+    return (
+      <View
+        style={[
+          styles.center,
+          { backgroundColor: theme.colors.background, flex: 1 },
+        ]}
+      >
+        <ThemeText style={{ color: theme.colors.error }}>{error}</ThemeText>
+      </View>
+    );
+  }
+
+  // You may want to keep your custom filters, or move them to the hook
+  const featuredEvents = events.filter((e) => e.is_featured);
+  const upcomingEvents = events.filter(
+    (e) => new Date(e.end_time) >= new Date()
   );
-  const popularEvents = filterPopularEvents(events);
-  const pastEvents = filterPastEvents(events);
+  const pastEvents = events.filter((e) => new Date(e.end_time) < new Date());
+  const nearYouEvents = userLocation
+    ? events.filter((e) => {
+        if (!e.location_lat || !e.location_lng) return false;
+        // Simple distance check (e.g., within 50km)
+        const R = 6371; // km
+        const dLat = ((e.location_lat - userLocation.lat) * Math.PI) / 180;
+        const dLng = ((e.location_lng - userLocation.lng) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((userLocation.lat * Math.PI) / 180) *
+            Math.cos((e.location_lat * Math.PI) / 180) *
+            Math.sin(dLng / 2) *
+            Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const d = R * c;
+        return d < 50;
+      })
+    : [];
+  // ... keep your other filters as needed ...
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }}>
       {/* 1. Featured Events */}
-      <Section
+      {/* <Section
         icon={<Ionicons name="star" size={22} color="#FFD93D" />}
         title="Featured Events"
         description="Hand-picked events you shouldn't miss."
@@ -145,9 +155,80 @@ export default function EventsIndexScreen() {
             />
           ))}
         </View>
+      </Section> */}
+
+      {/* 1. Event Invitations */}
+      <Section
+        icon={<Ionicons name="mail" size={22} color="#FF6B6B" />}
+        title="Event Invitations"
+        description="Events you've been invited to"
+        onPress={() => router.push("/events/invitations")}
+      >
+        <View>
+          {events
+            .filter((e) =>
+              e.invitations?.some(
+                (i) => i.user_id === userId && i.status === "pending"
+              )
+            )
+            .slice(0, 3)
+            .map((event) => (
+              <EventCardMedium
+                key={event.id}
+                event={event}
+                onPress={() => handleEventPress(event)}
+              />
+            ))}
+        </View>
       </Section>
 
-      {/* 2. Upcoming Events */}
+      {/* 2. Your Events */}
+      <Section
+        icon={<Ionicons name="create" size={22} color="#4a90e2" />}
+        title="Your Events"
+        description="Events you've created"
+        onPress={() => router.push("/events/own")}
+      >
+        <View>
+          {events
+            .filter((e) => e.creator_id === userId)
+            .slice(0, 3)
+            .map((event) => (
+              <EventCardMedium
+                key={event.id}
+                event={event}
+                onPress={() => handleEventPress(event)}
+              />
+            ))}
+        </View>
+      </Section>
+
+      {/* 3. Events You're Going To */}
+      <Section
+        icon={<Ionicons name="checkmark-circle" size={22} color="#6BCB77" />}
+        title="Events You're Going To"
+        description="Events you've confirmed attendance"
+        onPress={() => router.push("/events/going")}
+      >
+        <View>
+          {events
+            .filter((e) =>
+              e.participants?.some(
+                (p) => p.user_id === userId && p.status === "going"
+              )
+            )
+            .slice(0, 3)
+            .map((event) => (
+              <EventCardMedium
+                key={event.id}
+                event={event}
+                onPress={() => handleEventPress(event)}
+              />
+            ))}
+        </View>
+      </Section>
+
+      {/* 5. Upcoming Events */}
       <Section
         icon={<Ionicons name="calendar" size={22} color="#4a90e2" />}
         title="Upcoming Events"
@@ -162,8 +243,23 @@ export default function EventsIndexScreen() {
         ))}
       </Section>
 
-      {/* 3. Events Near You */}
+      {/* 6. Past Events */}
       <Section
+        icon={<Ionicons name="time" size={22} color="#FF6B6B" />}
+        title="Past Events"
+        description="Events that have already happened."
+      >
+        {pastEvents.map((event) => (
+          <EventCardMedium
+            key={event.id}
+            event={event}
+            onPress={() => handleEventPress(event)}
+          />
+        ))}
+      </Section>
+
+      {/* 7. Events Near You */}
+      {/* <Section
         icon={<Ionicons name="location" size={22} color="#6BCB77" />}
         title="Events Near You"
         description={`Discover events happening close to your location. ${
@@ -177,9 +273,9 @@ export default function EventsIndexScreen() {
             onPress={() => handleEventPress(event)}
           />
         ))}
-      </Section>
+      </Section> */}
 
-      {/* 4. Recommended For You */}
+      {/* 8. Recommended For You
       <Section
         icon={
           <MaterialCommunityIcons
@@ -191,50 +287,32 @@ export default function EventsIndexScreen() {
         title="Recommended For You"
         description="Events we think you'll love, based on your interests."
       >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ paddingLeft: 16 }}
-        >
-          {recommendedEvents.map((event) => (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {events.map((event) => (
             <EventCard
               key={event.id}
               event={event}
               onPress={() => handleEventPress(event)}
+              style={{ width: 370, marginRight: 0 }}
             />
           ))}
         </ScrollView>
-      </Section>
+      </Section> */}
 
-      {/* 5. Popular This Week */}
-      <Section
+      {/* 9. Popular This Week */}
+      {/* <Section
         icon={<FontAwesome5 name="fire" size={20} color="#FF6B81" />}
         title="Popular This Week"
         description="Trending events everyone is talking about."
       >
-        {popularEvents.map((event) => (
+        {events.map((event) => (
           <EventCardMedium
             key={event.id}
             event={event}
             onPress={() => handleEventPress(event)}
           />
         ))}
-      </Section>
-
-      {/* 6. Past Events */}
-      <Section
-        icon={<Ionicons name="time" size={22} color="#888" />}
-        title="Past Events"
-        description="Look back at events you've attended or missed."
-      >
-        {pastEvents.map((event) => (
-          <EventCardMedium
-            key={event.id}
-            event={event}
-            onPress={() => handleEventPress(event)}
-          />
-        ))}
-      </Section>
+      </Section> */}
     </ScrollView>
   );
 }

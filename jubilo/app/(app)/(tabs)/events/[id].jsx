@@ -1,84 +1,87 @@
 import Avatar from "@/components/Avatar";
 import CategoryBadge from "@/components/events/CategoryBadge";
 import EventImagesBottomSheet from "@/components/events/EventImagesBottomSheet";
+import EventParticipantsModal from "@/components/events/EventParticipantsModal";
 import EventQnABottomSheet from "@/components/events/EventQnABottomSheet";
 import FollowButton from "@/components/FollowButton";
 import ThemeText from "@/components/theme/ThemeText";
 import UserChip from "@/components/UserChip";
 import { useAuth } from "@/contexts/AuthContext";
 import { getShortContent } from "@/helpers/common";
+import { useEventDetails } from "@/hooks/events/useEventDetails";
+import { useEventParticipants } from "@/hooks/events/useEventParticipants";
 import { useTheme } from "@/hooks/theme";
-import { useEventFollowersSubscription } from "@/hooks/useFollowersSubscription";
-import { useEventParticipantsSubscription } from "@/hooks/useParticipantsSubscription";
-import { supabase } from "@/lib/supabase";
-import { getEventDetails, updateRSVP } from "@/services/events";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Image, StyleSheet, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function EventDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const navigation = useNavigation();
   const theme = useTheme();
-  const [event, setEvent] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("images");
   const [actionLoading, setActionLoading] = useState(false);
-  const { user } = useAuth();
   const [imagesSheetOpen, setImagesSheetOpen] = useState(false);
   const [qnaSheetOpen, setQnASheetOpen] = useState(false);
+  const [participantsModalVisible, setParticipantsModalVisible] =
+    useState(false);
+
+  // Use new hooks
+  const {
+    event,
+    loading,
+    error,
+    updateEvent,
+    joinEvent,
+    leaveEvent,
+    refresh: refreshEvent,
+  } = useEventDetails(id);
+  const {
+    participants,
+    stats,
+    updateStatus,
+    getParticipantStatus,
+    refresh: refreshParticipants,
+  } = useEventParticipants(id);
+
+  // Compute top question and answer
+  const topQuestion = event?.questions?.length
+    ? [...event.questions].sort(
+        (a, b) => (b.upvotes || 0) - (a.upvotes || 0)
+      )[0]
+    : null;
+
+  const topAnswer = topQuestion?.answers?.length
+    ? [...topQuestion.answers].sort(
+        (a, b) => (b.upvotes || 0) - (a.upvotes || 0)
+      )[0]
+    : null;
 
   useEffect(() => {
-    if (!id) {
-      setError("No event ID provided");
-      setLoading(false);
-      return;
-    }
-    fetchEventDetails();
-  }, [id]);
-
-  const fetchEventDetails = async () => {
-    try {
-      setLoading(true);
-      const eventData = await getEventDetails(id, user?.id);
-      if (!eventData) throw new Error("Event not found");
-      setEvent(eventData);
+    if (event && navigation && navigation.setOptions) {
       navigation.setOptions({
-        title: eventData.title || "Event Details",
+        title: event.title || "Event Details",
       });
-      setError(null);
-      // Debug logs
-      console.log("Permissions:", eventData.permissions);
-      console.log("Participants:", eventData.participants);
-      console.log("Invites:", eventData.invites);
-      console.log("Current user:", user?.id);
-    } catch (error) {
-      setError(error.message || "Failed to load event");
-    } finally {
-      setLoading(false);
     }
-  };
-
-  // Realtime event followers subscription
-  useEventFollowersSubscription(
-    event?.id && !event.is_private ? event.id : null,
-    fetchEventDetails
-  );
-  // Realtime event participants subscription
-  useEventParticipantsSubscription(
-    event?.id ? event.id : null,
-    fetchEventDetails
-  );
+  }, [event, navigation]);
 
   // Join/Leave handlers
   const handleJoin = async () => {
     setActionLoading(true);
     try {
-      await updateRSVP(event.id, "going");
-      await fetchEventDetails();
+      await joinEvent("going");
+      await refreshEvent();
+      await refreshParticipants();
     } catch (e) {
       Alert.alert("Error", e.message || "Failed to join event");
     } finally {
@@ -94,14 +97,9 @@ export default function EventDetailsScreen() {
         onPress: async () => {
           setActionLoading(true);
           try {
-            // Delete the participant row from event_participants
-            const { error } = await supabase
-              .from("event_participants")
-              .delete()
-              .eq("event_id", event.id)
-              .eq("user_id", user.id);
-            if (error) throw error;
-            await fetchEventDetails();
+            await leaveEvent();
+            await refreshEvent();
+            await refreshParticipants();
           } catch (e) {
             Alert.alert("Error", e.message || "Failed to leave event");
           } finally {
@@ -111,6 +109,10 @@ export default function EventDetailsScreen() {
       },
     ]);
   };
+
+  // Owner invite section (private events only)
+  const showInviteSection =
+    event && user && event.creator_id === user.id && event.is_private;
 
   if (loading) {
     return (
@@ -142,299 +144,373 @@ export default function EventDetailsScreen() {
   // Short location logic
   const shortLocation =
     event.location?.name || getShortContent(event.location?.address || "", 32);
-  const isOwner = event.permissions?.isOwner;
+  const isOwner = event.creator_id === user.id;
   const isPublic = !event.is_private;
+  const isParticipant = participants.some((p) => p.user_id === user.id);
   const canFollow = isPublic && !isOwner;
   const canShare = isPublic && !isOwner;
   const canSeeParticipants =
-    isPublic ||
-    isOwner ||
-    event.permissions?.isParticipant ||
-    event.permissions?.isInvited;
+    isPublic || isOwner || isParticipant || event.permissions?.isInvited;
+  const canUploadImages =
+    isOwner || (event.allow_guests_to_post && isParticipant);
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      {/* Image Cover + Top Buttons */}
-      <View style={styles.coverContainer}>
-        {event.images?.[0]?.image_url ? (
-          <Image
-            source={{ uri: event.images[0].image_url }}
-            style={styles.coverImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View
-            style={[
-              styles.coverImage,
-              {
-                backgroundColor: theme.colors.grey,
-                justifyContent: "center",
-                alignItems: "center",
-              },
-            ]}
-          >
-            <Ionicons
-              name="image-outline"
-              size={40}
-              color={theme.colors.textSecondary}
+    <>
+      <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        {/* Image Cover + Top Buttons */}
+        <View style={styles.coverContainer}>
+          {event.images?.[0]?.image_url ? (
+            <Image
+              source={{ uri: event.images[0].image_url }}
+              style={styles.coverImage}
+              resizeMode="cover"
             />
-          </View>
-        )}
-        {/* Top left: Back button */}
-        <TouchableOpacity
-          style={[
-            styles.backButton,
-            { backgroundColor: theme.colors.cardBackground },
-          ]}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-        </TouchableOpacity>
-        {/* Top right: Settings (owner) or Share (public, not owner) */}
-        {isOwner ? (
+          ) : (
+            <View
+              style={[
+                styles.coverImage,
+                {
+                  backgroundColor: theme.colors.grey,
+                  justifyContent: "center",
+                  alignItems: "center",
+                },
+              ]}
+            >
+              <Ionicons
+                name="image-outline"
+                size={40}
+                color={theme.colors.textSecondary}
+              />
+            </View>
+          )}
+          {/* Top left: Back button */}
           <TouchableOpacity
             style={[
-              styles.topRightButton,
+              styles.backButton,
               { backgroundColor: theme.colors.cardBackground },
             ]}
-            onPress={() => {
-              /* open settings modal */
-            }}
+            onPress={() => router.back()}
           >
-            <Ionicons
-              name="settings-outline"
-              size={24}
-              color={theme.colors.text}
-            />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
           </TouchableOpacity>
-        ) : canShare ? (
-          <TouchableOpacity
-            style={[
-              styles.topRightButton,
-              { backgroundColor: theme.colors.primary },
-            ]}
-            onPress={() => {
-              /* open share bottom sheet */
-            }}
-          >
-            <Ionicons
-              name="share-outline"
-              size={24}
-              color={theme.colors.text}
-            />
-          </TouchableOpacity>
-        ) : null}
-        <View style={[styles.bottomRightBadge]}>
-          <CategoryBadge category={event.category} />
+          {/* Top right: Settings (owner) or Share (public, not owner) */}
+          {isOwner ? (
+            <TouchableOpacity
+              style={[
+                styles.topRightButton,
+                { backgroundColor: theme.colors.cardBackground },
+              ]}
+              onPress={() => {
+                /* open settings modal */
+              }}
+            >
+              <Ionicons
+                name="settings-outline"
+                size={24}
+                color={theme.colors.text}
+              />
+            </TouchableOpacity>
+          ) : canShare ? (
+            <TouchableOpacity
+              style={[
+                styles.topRightButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              onPress={() => {
+                /* open share bottom sheet */
+              }}
+            >
+              <Ionicons
+                name="share-outline"
+                size={24}
+                color={theme.colors.text}
+              />
+            </TouchableOpacity>
+          ) : null}
+          <View style={[styles.bottomRightBadge]}>
+            <CategoryBadge category={event.category} />
+          </View>
         </View>
-      </View>
 
-      {/* Title & Host */}
-      <View style={styles.titleRow}>
-        <ThemeText style={styles.title}>{event.title}</ThemeText>
-        {/* Followers Row */}
-        {isPublic && (
-          <View style={styles.followersRow}>
-            <Ionicons
-              name="people-outline"
-              size={20}
-              color={theme.colors.primary}
-            />
-            <ThemeText style={styles.followersCount}>
-              {event.followers_count?.[0]?.count || 0} follower
-              {event.followers_count?.[0]?.count === 1 ? "" : "s"}
-            </ThemeText>
+        {/* Title & Host */}
+        <View style={styles.titleRow}>
+          <ThemeText style={styles.title}>{event.title}</ThemeText>
+          {/* Followers Row */}
+          {isPublic && (
+            <View style={styles.followersRow}>
+              <Ionicons
+                name="people-outline"
+                size={20}
+                color={theme.colors.primary}
+              />
+              <ThemeText style={styles.followersCount}>
+                {event.followers_count?.[0]?.count || 0} follower
+                {event.followers_count?.[0]?.count === 1 ? "" : "s"}
+              </ThemeText>
+            </View>
+          )}
+        </View>
+
+        {/* Host Card */}
+        <TouchableOpacity
+          style={styles.hostRow}
+          onPress={() => router.push(`/profile/${event.creator?.id}`)}
+        >
+          <UserChip user={event.creator} size={40} />
+        </TouchableOpacity>
+
+        {/* Accept/Decline for private events */}
+        {!isPublic && event.permissions?.isInvited && (
+          <View style={styles.actionButtonsRow}>
+            <TouchableOpacity
+              style={[
+                styles.acceptBtn,
+                { backgroundColor: theme.colors.success },
+              ]}
+              onPress={() => {
+                // TODO: Implement accept invite logic
+              }}
+              disabled={actionLoading}
+            >
+              <ThemeText style={[styles.actionBtnText, { color: "#fff" }]}>
+                Accept
+              </ThemeText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.declineBtn,
+                { backgroundColor: theme.colors.error, marginLeft: 8 },
+              ]}
+              onPress={() => {
+                // TODO: Implement decline invite logic
+              }}
+              disabled={actionLoading}
+            >
+              <ThemeText style={[styles.actionBtnText, { color: "#fff" }]}>
+                Decline
+              </ThemeText>
+            </TouchableOpacity>
           </View>
         )}
-      </View>
 
-      {/* Host Card */}
-      <TouchableOpacity
-        style={styles.hostRow}
-        onPress={() => router.push(`/profile/${event.creator?.id}`)}
-      >
-        <UserChip user={event.creator} size={40} />
-      </TouchableOpacity>
-
-      {/* Accept/Decline for private events */}
-      {!isPublic && event.permissions?.isInvited && (
-        <View style={styles.actionButtonsRow}>
-          <TouchableOpacity
-            style={[
-              styles.acceptBtn,
-              { backgroundColor: theme.colors.success },
-            ]}
-            onPress={() => {
-              // TODO: Implement accept invite logic
-            }}
-            disabled={actionLoading}
-          >
-            <ThemeText style={[styles.actionBtnText, { color: "#fff" }]}>
-              Accept
-            </ThemeText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.declineBtn,
-              { backgroundColor: theme.colors.error, marginLeft: 8 },
-            ]}
-            onPress={() => {
-              // TODO: Implement decline invite logic
-            }}
-            disabled={actionLoading}
-          >
-            <ThemeText style={[styles.actionBtnText, { color: "#fff" }]}>
-              Decline
-            </ThemeText>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Description */}
-      <ThemeText style={styles.description}>
-        {getShortContent(event.description || "", 200)}
-      </ThemeText>
-
-      {/* Location Row */}
-      <TouchableOpacity
-        style={styles.infoRow}
-        onPress={() => {
-          // TODO /* open map modal */
-        }}
-      >
-        <Ionicons name="location" size={20} color={theme.colors.primary} />
-        <ThemeText style={styles.infoRowText}>{shortLocation}</ThemeText>
-      </TouchableOpacity>
-
-      {/* Time Row */}
-      <View style={styles.infoRow}>
-        <Ionicons name="calendar" size={20} color={theme.colors.primary} />
-        <ThemeText style={styles.infoRowText}>
-          {new Date(event.start_time).toLocaleString()} -{" "}
-          {event.end_time ? new Date(event.end_time).toLocaleString() : ""}
+        {/* Description */}
+        <ThemeText style={styles.description}>
+          {getShortContent(event.description || "", 200)}
         </ThemeText>
-      </View>
 
-      {/* Participants Row */}
-      {canSeeParticipants && (
+        {/* Location Row */}
         <TouchableOpacity
-          style={styles.participantsRow}
+          style={styles.infoRow}
           onPress={() => {
-            /* open participants modal */
+            // TODO /* open map modal */
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            {(event.participants || []).slice(0, 8).map((p) => (
-              <Avatar
-                key={p?.id}
-                uri={p.user?.image_url}
-                size={32}
-                style={{
-                  marginRight: -8,
-                  borderWidth: 2,
-                  borderColor: theme.colors.background,
-                }}
-              />
-            ))}
-          </View>
-          <ThemeText style={styles.participantsCount}>
-            {event.participants?.length}
-            {event.max_participants ? ` / ${event.max_participants}` : ""}
-          </ThemeText>
+          <Ionicons name="location" size={20} color={theme.colors.primary} />
+          <ThemeText style={styles.infoRowText}>{shortLocation}</ThemeText>
         </TouchableOpacity>
-      )}
-      {/* Join/Going and Follow Buttons Row */}
-      <View style={styles.actionButtonsRow}>
-        {/* Join/Going button */}
-        {!isOwner && (
+
+        {/* Time Row */}
+        <View style={styles.infoRow}>
+          <Ionicons name="calendar" size={20} color={theme.colors.primary} />
+          <ThemeText style={styles.infoRowText}>
+            {new Date(event.start_time).toLocaleString()} -{" "}
+            {event.end_time ? new Date(event.end_time).toLocaleString() : ""}
+          </ThemeText>
+        </View>
+
+        {/* Participants Row */}
+        {canSeeParticipants && (
           <TouchableOpacity
-            style={[
-              styles.actionButton,
-              {
-                backgroundColor: event.permissions?.isParticipant
-                  ? theme.colors.success
-                  : theme.colors.primary,
-                justifyContent: "center",
-                alignItems: "center",
-              },
-            ]}
-            onPress={() => {
-              if (event.permissions?.isParticipant) {
-                handleLeave();
-              } else {
-                handleJoin();
-              }
-            }}
-            disabled={actionLoading}
+            style={styles.participantsRow}
+            onPress={() => setParticipantsModalVisible(true)}
           >
-            <ThemeText color="#fff" style={[styles.actionBtnText]}>
-              {actionLoading
-                ? "..."
-                : event.permissions?.isParticipant
-                ? "Going"
-                : "Join"}
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {(participants || []).slice(0, 8).map((p) => (
+                <Avatar
+                  key={p?.id}
+                  uri={p.user?.image_url}
+                  size={32}
+                  style={{
+                    marginRight: -8,
+                    borderWidth: 2,
+                    borderColor: theme.colors.background,
+                  }}
+                />
+              ))}
+            </View>
+            <ThemeText style={styles.participantsCount}>
+              {participants?.length}
+              {event.max_participants ? ` / ${event.max_participants}` : ""}
             </ThemeText>
           </TouchableOpacity>
         )}
-        {/* FollowButton for public events */}
-        {isPublic && !isOwner && (
-          <FollowButton
-            type="event"
-            eventId={event.id}
-            isFollowing={event.permissions?.isFollowing}
-            onFollow={fetchEventDetails}
-            onUnfollow={fetchEventDetails}
-          />
-        )}
-      </View>
+        {/* Join/Going and Follow Buttons Row */}
+        <View style={styles.actionButtonsRow}>
+          {/* Join/Going button */}
+          {!isOwner && (
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                {
+                  backgroundColor: isParticipant
+                    ? theme.colors.success
+                    : theme.colors.primary,
+                  justifyContent: "center",
+                  alignItems: "center",
+                },
+              ]}
+              onPress={() => {
+                if (isParticipant) {
+                  handleLeave();
+                } else {
+                  handleJoin();
+                }
+              }}
+              disabled={actionLoading}
+            >
+              <ThemeText color="#fff" style={[styles.actionBtnText]}>
+                {actionLoading ? "..." : isParticipant ? "Going" : "Join"}
+              </ThemeText>
+            </TouchableOpacity>
+          )}
+          {/* FollowButton for public events */}
+          {isPublic && !isOwner && (
+            <FollowButton
+              type="event"
+              eventId={event.id}
+              isFollowing={event.permissions?.isFollowing}
+              onFollow={refreshEvent}
+              onUnfollow={refreshEvent}
+            />
+          )}
+        </View>
 
-      {/* Images & Q&A Buttons */}
-      <View style={styles.sheetButtonsRow}>
-        <TouchableOpacity
-          style={[
-            styles.sheetButton,
-            { backgroundColor: theme.colors.cardBackground },
-          ]}
-          onPress={() => setImagesSheetOpen(true)}
-          activeOpacity={0.85}
-        >
-          <Ionicons
-            name="image-outline"
-            size={22}
-            color={theme.colors.primary}
-          />
-          <ThemeText style={styles.sheetButtonText}>
-            {event.images?.length ? `${event.images.length} Images` : "Images"}
-          </ThemeText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.sheetButton,
-            { backgroundColor: theme.colors.cardBackground },
-          ]}
-          onPress={() => setQnASheetOpen(true)}
-          activeOpacity={0.85}
-        >
-          <Ionicons
-            name="chatbubble-ellipses-outline"
-            size={22}
-            color={theme.colors.primary}
-          />
-          <ThemeText style={styles.sheetButtonText}>
-            {event.questions?.length ? `${event.questions.length} Q&A` : "Q&A"}
-          </ThemeText>
-        </TouchableOpacity>
-      </View>
-
+        {/* Images & Q&A Buttons */}
+        <View style={styles.sheetButtonsRow}>
+          {/* Images row with View All button */}
+          <View style={{ width: "100%" }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingHorizontal: 16,
+                marginBottom: 4,
+              }}
+            >
+              <ThemeText
+                style={{
+                  fontWeight: "bold",
+                  fontSize: 16,
+                }}
+              >
+                Event Images
+              </ThemeText>
+              <TouchableOpacity onPress={() => setImagesSheetOpen(true)}>
+                <ThemeText
+                  color={theme.colors.primary}
+                  style={{ fontWeight: "bold" }}
+                >
+                  View All
+                </ThemeText>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ paddingLeft: 16, paddingBottom: 8 }}
+            >
+              {(event.images || []).map((img, idx) => (
+                <TouchableOpacity
+                  key={img.id || idx}
+                  onPress={() => setImagesSheetOpen(true)}
+                >
+                  <Image
+                    source={{ uri: img.image_url }}
+                    style={{
+                      width: 100,
+                      height: 100,
+                      borderRadius: 8,
+                      marginRight: 8,
+                      backgroundColor: theme.colors.border,
+                    }}
+                  />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+          {/* QnA row with top question and answer */}
+          <View style={{ width: "100%", marginTop: 8 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingHorizontal: 16,
+                marginBottom: 4,
+              }}
+            >
+              <ThemeText
+                style={{
+                  fontWeight: "bold",
+                  fontSize: 16,
+                  color: theme.colors.text,
+                }}
+              >
+                Event QnA
+              </ThemeText>
+              <TouchableOpacity onPress={() => setQnASheetOpen(true)}>
+                <ThemeText
+                  color={theme.colors.primary}
+                  style={{ fontWeight: "bold" }}
+                >
+                  View All
+                </ThemeText>
+              </TouchableOpacity>
+            </View>
+            {topQuestion ? (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+                <ThemeText
+                  style={{ fontWeight: "bold", color: theme.colors.text }}
+                >
+                  {topQuestion.question}
+                </ThemeText>
+                {topAnswer && (
+                  <View style={{ marginTop: 4 }}>
+                    <ThemeText style={{ color: theme.colors.text }}>
+                      {topAnswer.answer}
+                    </ThemeText>
+                    <ThemeText
+                      style={{
+                        fontSize: 12,
+                        color: theme.colors.text,
+                        marginTop: 2,
+                      }}
+                    >
+                      {topAnswer.upvotes} upvotes •{" "}
+                      {topQuestion.answers?.length || 0} answers
+                    </ThemeText>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <ThemeText
+                style={{ paddingHorizontal: 16, color: theme.colors.text }}
+              >
+                No questions yet
+              </ThemeText>
+            )}
+          </View>
+        </View>
+      </ScrollView>
       {/* Images BottomSheet */}
       <EventImagesBottomSheet
         eventId={event.id}
         visible={imagesSheetOpen}
         onClose={() => setImagesSheetOpen(false)}
         images={event.images}
-        canUpload={event.permissions?.canUploadImages}
+        canUpload={canUploadImages}
+        onUploaded={refreshEvent}
       />
 
       {/* Q&A BottomSheet */}
@@ -443,9 +519,20 @@ export default function EventDetailsScreen() {
         visible={qnaSheetOpen}
         onClose={() => setQnASheetOpen(false)}
         canAsk={event.permissions?.canAnswerQnA}
-        onQuestionAdded={fetchEventDetails}
+        canAnswer={event.permissions?.canAnswerQnA}
+        onQuestionAdded={refreshEvent}
       />
-    </View>
+
+      <EventParticipantsModal
+        visible={participantsModalVisible}
+        onClose={() => setParticipantsModalVisible(false)}
+        participants={participants}
+        eventId={event.id}
+        inviterId={user.id}
+        isPrivate={event.is_private}
+        isOwner={event.creator_id === user.id}
+      />
+    </>
   );
 }
 
@@ -530,7 +617,7 @@ const styles = StyleSheet.create({
   },
   participantsCount: { marginLeft: 12, fontSize: 16, color: "#888" },
   sheetButtonsRow: {
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     gap: 20,

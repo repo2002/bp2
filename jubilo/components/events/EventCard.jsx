@@ -1,7 +1,9 @@
 import Avatar from "@/components/Avatar";
 import ThemeText from "@/components/theme/ThemeText";
 import { useAuth } from "@/contexts/AuthContext";
+import { getShortContent } from "@/helpers/common";
 import { useTheme } from "@/hooks/theme";
+import { useImageCache } from "@/hooks/useImageCache";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
@@ -13,11 +15,15 @@ export default function EventCard({
   onRSVP,
   onFollow,
   onUnfollow,
+  style,
 }) {
   const theme = useTheme();
   const { user } = useAuth();
   const userId = user?.id;
   const router = useRouter();
+
+  // Cache event image
+  const { cachedUri: eventImageUri } = useImageCache(event.image_url);
 
   // Permissions logic (use event.permissions if available, else fallback)
   const isOwner = event.permissions?.isOwner || event.creator_id === userId;
@@ -47,6 +53,7 @@ export default function EventCard({
     <TouchableOpacity
       style={[
         styles.card,
+        style,
         {
           backgroundColor: theme.colors.cardBackground,
           borderColor: theme.colors.border,
@@ -57,22 +64,19 @@ export default function EventCard({
       activeOpacity={0.85}
     >
       <View style={styles.imageWrapper}>
-        {event.images?.[0]?.image_url ? (
+        {/* Event Image */}
+        {eventImageUri ? (
           <Image
-            source={{ uri: event.images[0].image_url }}
+            source={{ uri: eventImageUri }}
             style={styles.image}
+            resizeMode="cover"
           />
         ) : (
           <View
-            style={[
-              styles.image,
-              {
-                backgroundColor: theme.colors.border,
-                justifyContent: "center",
-                alignItems: "center",
-              },
-            ]}
-          />
+            style={[styles.image, { backgroundColor: theme.colors.greyLight }]}
+          >
+            <Ionicons name="image" size={32} color={theme.colors.grey} />
+          </View>
         )}
         {/* Date badge (top left) */}
         <View style={[styles.dateBadge, { backgroundColor: "white" }]}>
@@ -116,7 +120,7 @@ export default function EventCard({
             style={[styles.meta, ,]}
             numberOfLines={1}
           >
-            {event.location?.address}
+            {getShortContent(event.location?.address, 30)}
           </ThemeText>
         </View>
         <View style={styles.row}>

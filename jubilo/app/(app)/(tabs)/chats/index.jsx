@@ -1,15 +1,11 @@
-import defaultAvatar from "@/assets/images/default-avatar.png";
 import EmptyState from "@/components/EmptyState";
 import ThemeText from "@/components/theme/ThemeText";
 import { useAuth } from "@/contexts/AuthContext";
 import { useChatSearch } from "@/contexts/SearchContext";
+import useChatList from "@/hooks/chat/useChatList";
 import { useTheme } from "@/hooks/theme";
-import useRoomSubscription from "@/hooks/useRoomSubscription";
-import { supabase } from "@/lib/supabase";
-import { getUnreadCount, getUserChats } from "@/services/chatService";
-import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -26,130 +22,17 @@ export default function ChatsIndex() {
   const theme = useTheme();
   const { search } = useChatSearch();
   const { user } = useAuth();
-  const [rooms, setRooms] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(null);
 
-  const handleCreateChat = useCallback(
-    (newChat) => {
-      // Refresh the chat list to include the new chat
-      fetchChats();
-    },
-    [fetchChats]
-  );
-
-  const fetchChats = useCallback(async () => {
-    if (!user?.id) return;
-
-    try {
-      setError(null);
-      const { success, data, error } = await getUserChats(user.id);
-
-      if (success) {
-        const formattedRooms = await Promise.all(
-          data.map(async (room) => {
-            const lastMsg =
-              room.last_message && room.last_message.length > 0
-                ? room.last_message[0]
-                : null;
-            // For direct chats, find the other participant
-            const otherParticipant = room.participants?.find(
-              (p) => p.user && p.user.id !== user.id
-            );
-
-            // Compose display name for the other participant
-            let participantName = null;
-            if (otherParticipant && otherParticipant.user) {
-              const { first_name, last_name, username } = otherParticipant.user;
-              participantName = [first_name, last_name]
-                .filter(Boolean)
-                .join(" ");
-              if (!participantName) participantName = username || "Unknown";
-            }
-
-            // Compose display name for the last message sender
-            let lastMsgSender = null;
-            if (lastMsg?.sender) {
-              const { first_name, last_name, username } = lastMsg.sender;
-              lastMsgSender = [first_name, last_name].filter(Boolean).join(" ");
-              if (!lastMsgSender) lastMsgSender = username || "Unknown";
-            }
-
-            // Always show a fallback avatar
-            let avatar = room.is_group
-              ? `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                  room.name
-                )}`
-              : otherParticipant?.user?.image_url
-              ? otherParticipant.user.image_url
-              : defaultAvatar;
-
-            // Get unread count
-            const { success: unreadSuccess, data: unreadCount } =
-              await getUnreadCount(room.id, user.id);
-
-            return {
-              id: room.id,
-              name: room.is_group ? room.name : participantName,
-              is_group: room.is_group,
-              avatar,
-              lastMsg: lastMsg
-                ? {
-                    text: lastMsg.content,
-                    sender: lastMsgSender,
-                    createdAt: lastMsg.created_at,
-                    type: lastMsg.type,
-                  }
-                : null,
-              unread: unreadSuccess ? unreadCount : 0,
-              participants: room.participants,
-            };
-          })
-        );
-
-        setRooms(formattedRooms);
-      } else {
-        setError(error);
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [user?.id]);
-
-  useEffect(() => {
-    fetchChats();
-
-    // Subscribe to new messages
-    const subscription = supabase
-      .channel("chat_messages")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "chat_messages",
-        },
-        () => {
-          fetchChats();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [fetchChats]);
+  // Use the new chat list hook
+  const { chats, loading, error, refetch } = useChatList(user?.id);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchChats();
-  }, [fetchChats]);
+    refetch().finally(() => setRefreshing(false));
+  }, [refetch]);
 
-  const filteredRooms = rooms.filter((room) =>
+  const filteredRooms = chats.filter((room) =>
     room?.name?.toLowerCase().includes(search?.toLowerCase() || "")
   );
 
@@ -160,7 +43,7 @@ export default function ChatsIndex() {
     >
       <Image
         source={
-          typeof item.avatar === "string" ? { uri: item.avatar } : item.avatar // this will be the local image if not a string
+          typeof item.avatar === "string" ? { uri: item.avatar } : item.avatar
         }
         style={styles.avatar}
       />
@@ -211,17 +94,6 @@ export default function ChatsIndex() {
     </TouchableOpacity>
   );
 
-  useRoomSubscription(fetchChats);
-  // Optionally, subscribe to all participants/messages changes for all rooms:
-  // useParticipantsSubscription(null, fetchChats);
-  // useMessagesSubscription(null, fetchChats);
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchChats();
-    }, [fetchChats])
-  );
-
   if (loading && !refreshing) {
     return (
       <View
@@ -242,7 +114,7 @@ export default function ChatsIndex() {
           subMessage={error}
           action={{
             label: "Try Again",
-            onPress: fetchChats,
+            onPress: refetch,
           }}
         />
       </View>

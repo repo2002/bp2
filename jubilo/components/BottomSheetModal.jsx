@@ -10,6 +10,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
 } from "react";
 import {
@@ -38,6 +39,9 @@ const BottomSheetModal = forwardRef(
   ) => {
     const sheetRef = useRef(null);
     const theme = useTheme();
+
+    // Memoize snap points to prevent unnecessary re-renders
+    const memoizedSnapPoints = useMemo(() => snapPoints, [snapPoints]);
 
     useImperativeHandle(ref, () => ({
       open: () => {
@@ -75,8 +79,8 @@ const BottomSheetModal = forwardRef(
     return (
       <BottomSheet
         ref={sheetRef}
-        index={-1}
-        snapPoints={snapPoints}
+        index={visible ? 0 : -1}
+        snapPoints={memoizedSnapPoints}
         enablePanDownToClose={enablePanDownToClose}
         backdropComponent={(props) => (
           <BottomSheetBackdrop

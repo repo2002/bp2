@@ -1,4 +1,6 @@
+import { supabase } from "@/lib/supabase";
 import { getSignedUrl } from "@/services/chatService";
+import { acceptEventInvitation } from "@/services/events";
 import { Ionicons } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -12,6 +14,7 @@ import {
   Send,
   SystemMessage,
 } from "react-native-gifted-chat";
+import InvitationCard from "./InvitationCard";
 
 // Generate 25 distinct colors for group chat members
 const generateGroupColors = () => {
@@ -48,47 +51,53 @@ const generateGroupColors = () => {
 const GROUP_COLORS = generateGroupColors();
 
 export const CustomBubble = (props) => {
-  const { theme, currentMessage } = props;
+  const { theme, currentMessage, currentUserId } = props;
   // Determine if this is a media message
   const isMedia = ["image", "video"].includes(currentMessage.type);
   return (
     <Bubble
       {...props}
       renderCustomView={(bubbleProps) => (
-        <CustomMessageContent {...bubbleProps} theme={theme} />
+        <CustomMessageContent
+          {...bubbleProps}
+          theme={theme}
+          currentUserId={currentUserId}
+        />
       )}
       renderUsernameOnMessage={false}
       wrapperStyle={{
-        left: isMedia
-          ? {
-              backgroundColor: "transparent",
-              borderRadius: 0,
-              padding: 0,
-              marginLeft: 0,
-            }
-          : {
-              backgroundColor: theme.colors.cardBackground,
-              borderRadius: 16,
-              padding: 8,
-              marginLeft: 0,
-            },
-        right: isMedia
-          ? {
-              backgroundColor: "transparent",
-              borderRadius: 0,
-              padding: 0,
-            }
-          : {
-              backgroundColor: theme.colors.primary,
-              borderRadius: 16,
-              padding: 8,
-            },
+        left:
+          currentMessage.type === "invitation"
+            ? { backgroundColor: "transparent", padding: 0, marginLeft: 0 }
+            : isMedia
+            ? {
+                backgroundColor: "transparent",
+                borderRadius: 0,
+                padding: 0,
+                marginLeft: 0,
+              }
+            : {
+                backgroundColor: theme.colors.cardBackground,
+                borderRadius: 16,
+                padding: 8,
+                marginLeft: 0,
+              },
+        right:
+          currentMessage.type === "invitation"
+            ? { backgroundColor: "transparent", padding: 0 }
+            : isMedia
+            ? { backgroundColor: "transparent", borderRadius: 0, padding: 0 }
+            : {
+                backgroundColor: theme.colors.primary,
+                borderRadius: 16,
+                padding: 8,
+              },
       }}
       textStyle={{
         left: { color: theme.colors.text },
         right: { color: "white" },
       }}
-      renderTime={() => null} // We'll render time manually for media
+      renderTime={() => null}
       renderMessageText={() => null}
     />
   );
@@ -271,7 +280,7 @@ export const CustomSystemMessage = (props) => (
   />
 );
 
-function CustomMessageContent({ currentMessage, theme }) {
+function CustomMessageContent({ currentMessage, theme, currentUserId }) {
   const [signedUrl, setSignedUrl] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -285,21 +294,14 @@ function CustomMessageContent({ currentMessage, theme }) {
   useEffect(() => {
     let isMounted = true;
     async function fetchUrl() {
-      console.log("Message data:", {
-        type: currentMessage.type,
-        text: currentMessage.text,
-        metadata: currentMessage.metadata,
-      });
-
       if (
         ["image", "video", "audio", "document"].includes(currentMessage.type) &&
         currentMessage.text &&
         !currentMessage.text.startsWith("http")
       ) {
-        console.log("Fetching signed URL for:", currentMessage.text);
         setLoading(true);
         const { success, url } = await getSignedUrl(currentMessage.text);
-        console.log("Signed URL result:", { success, url });
+
         if (isMounted) {
           setSignedUrl(success ? url : null);
           setLoading(false);
@@ -322,8 +324,6 @@ function CustomMessageContent({ currentMessage, theme }) {
   const ASPECT_RATIO = 1; // Default aspect ratio
 
   if (currentMessage.metadata) {
-    console.log("Image metadata:", currentMessage.metadata);
-
     // Try to get dimensions from metadata
     if (currentMessage.metadata.width && currentMessage.metadata.height) {
       const originalWidth = currentMessage.metadata.width;
@@ -333,8 +333,6 @@ function CustomMessageContent({ currentMessage, theme }) {
       // Calculate width while maintaining aspect ratio
       width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, originalWidth / 6));
       height = width / aspectRatio;
-
-      console.log("Calculated dimensions:", { width, height, aspectRatio });
     } else if (
       currentMessage.metadata.thumbnailWidth &&
       currentMessage.metadata.thumbnailHeight
@@ -345,12 +343,6 @@ function CustomMessageContent({ currentMessage, theme }) {
 
       width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, thumbWidth / 2));
       height = width / aspectRatio;
-
-      console.log("Calculated thumbnail dimensions:", {
-        width,
-        height,
-        aspectRatio,
-      });
     }
   }
 
@@ -380,7 +372,10 @@ function CustomMessageContent({ currentMessage, theme }) {
             fontSize: 10,
             color: theme.colors.grey,
             marginTop: 2,
-            alignSelf: "flex-end",
+            alignSelf:
+              currentMessage.user && currentUserId === currentMessage.user._id
+                ? "flex-end"
+                : "flex-start",
           }}
         >
           {new Date(currentMessage.createdAt).toLocaleTimeString([], {
@@ -411,7 +406,10 @@ function CustomMessageContent({ currentMessage, theme }) {
             fontSize: 10,
             color: theme.colors.grey,
             marginTop: 2,
-            alignSelf: "flex-end",
+            alignSelf:
+              currentMessage.user && currentUserId === currentMessage.user._id
+                ? "flex-end"
+                : "flex-start",
           }}
         >
           {new Date(currentMessage.createdAt).toLocaleTimeString([], {
@@ -467,6 +465,43 @@ function CustomMessageContent({ currentMessage, theme }) {
     );
   }
 
+  // Invitation messages
+  if (currentMessage.type === "invitation") {
+    let eventData;
+    try {
+      eventData = JSON.parse(currentMessage.text || currentMessage.content);
+    } catch (e) {
+      return <Text style={{ color: "red" }}>Invalid invitation data</Text>;
+    }
+    return (
+      <View style={{ alignItems: "flex-end", marginBottom: 0, padding: 0 }}>
+        <InvitationCard
+          event={eventData}
+          status={eventData.status || "pending"}
+          currentUserId={currentUserId}
+          onAccept={() => handleAccept(eventData.invitation_id)}
+          onDecline={() => handleDecline(eventData.invitation_id)}
+        />
+        <Text
+          style={{
+            fontSize: 10,
+            color: theme.colors.grey,
+            marginTop: 2,
+            alignSelf:
+              currentMessage.user && currentUserId === currentMessage.user._id
+                ? "flex-end"
+                : "flex-start",
+          }}
+        >
+          {new Date(currentMessage.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </Text>
+      </View>
+    );
+  }
+
   // Text messages (with timestamp inside bubble)
   if (currentMessage.text) {
     return (
@@ -484,7 +519,10 @@ function CustomMessageContent({ currentMessage, theme }) {
             fontSize: 10,
             color: theme.colors.grey,
             marginTop: 4,
-            alignSelf: "flex-end",
+            alignSelf:
+              currentMessage.user && currentUserId === currentMessage.user._id
+                ? "flex-end"
+                : "flex-start",
           }}
         >
           {new Date(currentMessage.createdAt).toLocaleTimeString([], {
@@ -497,4 +535,38 @@ function CustomMessageContent({ currentMessage, theme }) {
   }
 
   return null;
+}
+
+async function handleAccept(invitationId) {
+  try {
+    // Get current user
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not found");
+
+    // Use the consolidated function from events.js
+    const { data, error } = await acceptEventInvitation(invitationId, user.id);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error("Error accepting invitation:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+async function handleDecline(invitationId) {
+  try {
+    const { error } = await supabase
+      .from("event_invitations")
+      .update({ status: "rejected" })
+      .eq("id", invitationId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error("Error declining invitation:", error);
+    return { success: false, error: error.message };
+  }
 }

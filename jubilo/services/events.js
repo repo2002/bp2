@@ -1,3 +1,4 @@
+import { sendMessage } from "@/services/chatService";
 import { decode } from "base64-arraybuffer";
 import * as FileSystem from "expo-file-system";
 import { supabase } from "../lib/supabase";
@@ -152,10 +153,9 @@ export const getEventDetails = async (eventId, currentUserId = null) => {
             )
           )
         ),
-        invites:event_invites(
+        invites:event_invitations(
           id,
           status,
-          message,
           created_at,
           user:profiles!user_id(
             id,
@@ -195,7 +195,8 @@ export const getEventDetails = async (eventId, currentUserId = null) => {
     const canInvite = isOwner && data.is_private;
     const canUploadImages =
       isOwner || (data.allow_user_images && isParticipant);
-    const canAnswerQnA = data.is_private ? isParticipant : isFollowing;
+    const canAnswerQnA =
+      isOwner || (data.is_private ? isParticipant : isFollowing);
 
     return {
       ...data,
@@ -378,13 +379,14 @@ export const unfollowEvent = async (eventId) => {
   }
 };
 
-export const inviteToEvent = async (eventId, userId) => {
+export const inviteToEvent = async (eventId, userId, inviterId) => {
   try {
     const { data, error } = await supabase
-      .from("event_invites")
+      .from("event_invitations")
       .insert({
         event_id: eventId,
         user_id: userId,
+        inviter_id: inviterId,
         status: "pending",
       })
       .select()
@@ -401,7 +403,7 @@ export const inviteToEvent = async (eventId, userId) => {
 export const getEventInvites = async (eventId) => {
   try {
     const { data, error } = await supabase
-      .from("event_invites")
+      .from("event_invitations")
       .select(
         `
         *,
@@ -793,4 +795,117 @@ export function filterPopularEvents(events, count = 10) {
       (a, b) => (b.participants?.length || 0) - (a.participants?.length || 0)
     )
     .slice(0, count);
+}
+
+/**
+ * Invite a user to a private event, send a chat message, and create a notification.
+ * Only the event owner can invite, and only users they follow.
+ */
+export const inviteUserToPrivateEvent = async ({
+  eventId,
+  inviteeId,
+  inviterId,
+}) => {
+  try {
+    // Start a transaction
+    const { data: result, error: transactionError } = await supabase.rpc(
+      "invite_user_to_private_event",
+      {
+        p_event_id: eventId,
+        p_invitee_id: inviteeId,
+        p_inviter_id: inviterId,
+      }
+    );
+
+    if (transactionError) {
+      console.error("Transaction error:", transactionError);
+      throw transactionError;
+    }
+
+    // If we have a chat room ID from the transaction, send the chat message
+    if (result.chat_room_id) {
+      try {
+        const invitationContent = JSON.stringify({
+          eventId,
+          title: result.event.title,
+          description: result.event.description,
+          location: result.event.location,
+          start_time: result.event.start_time,
+          end_time: result.event.end_time,
+          image_url: result.event.image_url,
+          invitation_id: result.invitation_id,
+          user_id: inviteeId,
+        });
+
+        await sendMessage(
+          result.chat_room_id,
+          inviterId,
+          invitationContent,
+          "invitation"
+        );
+      } catch (e) {
+        console.error("Error sending chat message:", e);
+        // Don't throw here, as the invitation was already created
+      }
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Error inviting user to private event:", error);
+    throw error;
+  }
+};
+
+// Accept an event invitation
+export async function acceptEventInvitation(invitationId, userId) {
+  try {
+    console.log("Accepting invitation:", { invitationId, userId });
+
+    // Get the invitation details
+    const { data: invitation, error: invitationError } = await supabase
+      .from("event_invitations")
+      .select("*, events(*)")
+      .eq("id", invitationId)
+      .single();
+
+    if (invitationError) throw invitationError;
+    if (!invitation) throw new Error("Invitation not found");
+
+    // Update the invitation status to accepted
+    const { error: updateError } = await supabase
+      .from("event_invitations")
+      .update({ status: "accepted" })
+      .eq("id", invitationId);
+
+    if (updateError) throw updateError;
+
+    // Add or update participant status
+    const { error: participantError } = await supabase
+      .from("event_participants")
+      .upsert(
+        {
+          event_id: invitation.event_id,
+          user_id: userId,
+          status: "going",
+        },
+        {
+          onConflict: "event_id,user_id",
+          returning: "minimal",
+        }
+      );
+
+    if (participantError) throw participantError;
+
+    return {
+      data: {
+        event_id: invitation.event_id,
+        user_id: userId,
+        status: "going",
+      },
+      error: null,
+    };
+  } catch (error) {
+    console.error("Error accepting invitation:", error);
+    return { data: null, error };
+  }
 }

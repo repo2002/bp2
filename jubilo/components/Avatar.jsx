@@ -1,36 +1,59 @@
-import { getUserImageSource } from "@/services/imageService";
-import { Image } from "expo-image";
-import { useEffect, useState } from "react";
-import { StyleSheet } from "react-native";
+import { useTheme } from "@/hooks/theme";
+import { useImageCache } from "@/hooks/useImageCache";
+import { Ionicons } from "@expo/vector-icons";
+import { Image, StyleSheet, View } from "react-native";
 
-const Avatar = ({ uri, size = 40, borderRadius = 100, style = {} }) => {
-  const [imageSource, setImageSource] = useState(null);
-
-  useEffect(() => {
-    const loadImage = async () => {
-      const source = await getUserImageSource(uri);
-      setImageSource(source);
-    };
-
-    loadImage();
-  }, [uri]);
-
-  if (!imageSource) {
-    return null;
-  }
+export default function Avatar({ uri, size = 40, style }) {
+  const theme = useTheme();
+  const { cachedUri } = useImageCache(uri);
 
   return (
-    <Image
-      source={imageSource}
+    <View
       style={[
-        styles.avatar,
-        { width: size, height: size, borderRadius },
+        styles.container,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: theme.colors.greyLight,
+        },
         style,
       ]}
-    />
+    >
+      {cachedUri ? (
+        <Image
+          source={{ uri: cachedUri }}
+          style={[
+            styles.image,
+            {
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+            },
+          ]}
+        />
+      ) : (
+        <Ionicons
+          name="person"
+          size={size * 0.6}
+          color={theme.colors.grey}
+          style={styles.icon}
+        />
+      )}
+    </View>
   );
-};
+}
 
-export default Avatar;
-
-const styles = StyleSheet.create({});
+const styles = StyleSheet.create({
+  container: {
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  image: {
+    resizeMode: "cover",
+  },
+  icon: {
+    opacity: 0.5,
+  },
+});

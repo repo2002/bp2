@@ -402,65 +402,25 @@ export const sendMessage = async (
       );
     }
 
-    // First, verify we can read from the table
-    const { data: testRead, error: testReadError } = await supabase
-      .from("chat_messages")
-      .select("id")
-      .limit(1);
+    // Start a transaction
+    const { data: messageData, error: messageError } = await supabase.rpc(
+      "send_chat_message",
+      {
+        p_room_id: roomId,
+        p_sender_id: userId,
+        p_content: content,
+        p_type: type,
+        p_metadata: metadata,
+        p_reply_to: replyTo,
+      }
+    );
 
-    const messageData = {
-      room_id: roomId,
-      sender_id: userId,
-      content,
-      type,
-      metadata,
-      reply_to: replyTo,
-      created_at: new Date().toISOString(),
-    };
-
-    const { data, error } = await supabase
-      .from("chat_messages")
-      .insert(messageData)
-      .select(
-        `
-        *,
-        sender:sender_id (
-          id,
-          username,
-          first_name,
-            last_name,
-          image_url
-        ),
-        reply:reply_to (
-          id,
-          content,
-          type,
-          sender:sender_id (
-            id,
-            username
-          )
-        )
-      `
-      )
-      .single();
-
-    if (error) {
-      console.error("Detailed insert error:", {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-      });
-      throw error;
+    if (messageError) {
+      console.error("Error sending message:", messageError);
+      throw messageError;
     }
 
-    // Update room's updated_at
-    await supabase
-      .from("chat_rooms")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", roomId);
-
-    return { success: true, data };
+    return { success: true, data: messageData };
   } catch (error) {
     console.error("Error sending message:", error);
     return { success: false, error: error.message };
@@ -598,20 +558,16 @@ export const uploadFile = async (file, type, roomId, userId) => {
 // Get a signed URL for a file path (for private buckets)
 export const getSignedUrl = async (filePath) => {
   try {
-    console.log("Getting signed URL for path:", filePath);
     const { data, error } = await supabase.storage
       .from("chat-attachments")
       .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
 
     if (error) {
-      console.error("Error getting signed URL:", error);
       throw error;
     }
 
-    console.log("Signed URL response:", data);
     return { success: true, url: data.signedUrl };
   } catch (error) {
-    console.error("Error getting signed URL:", error);
     return { success: false, error: error.message };
   }
 };

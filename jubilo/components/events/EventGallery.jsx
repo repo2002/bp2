@@ -4,11 +4,11 @@ import {
   Dimensions,
   Image,
   Modal,
-  ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
+import MasonryList from "react-native-masonry-list";
 
 export default function EventGallery({ images }) {
   const [modalVisible, setModalVisible] = useState(false);
@@ -24,23 +24,18 @@ export default function EventGallery({ images }) {
 
   return (
     <>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={[
-          styles.scrollView,
-          { backgroundColor: theme.colors.background },
-        ]}
-      >
-        {images.map((img, idx) => (
-          <TouchableOpacity key={img.id || idx} onPress={() => openModal(idx)}>
-            <Image
-              source={{ uri: img.image_url }}
-              style={[styles.thumb, { backgroundColor: theme.colors.border }]}
-            />
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <MasonryList
+        images={images.map((img) => ({ uri: img.image_url }))}
+        imageContainerStyle={{
+          borderRadius: 8,
+          backgroundColor: theme.colors.background,
+        }}
+        spacing={1}
+        style={{ backgroundColor: theme.colors.background, flex: 1 }}
+        backgroundColor={theme.colors.background}
+        columns={2}
+        onPressImage={(item, index) => openModal(index)}
+      />
       <Modal
         visible={modalVisible}
         transparent
@@ -74,15 +69,16 @@ export default function EventGallery({ images }) {
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
-    marginVertical: 8,
-    paddingLeft: 16,
+  galleryRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    // No padding or margin
   },
   thumb: {
     width: 100,
-    height: 70,
-    borderRadius: 8,
-    marginRight: 10,
+    height: 100,
+    margin: 0,
+    padding: 0,
   },
   modalBg: {
     flex: 1,
