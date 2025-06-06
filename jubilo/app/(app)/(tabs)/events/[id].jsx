@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getShortContent } from "@/helpers/common";
 import { useEventDetails } from "@/hooks/events/useEventDetails";
 import { useEventParticipants } from "@/hooks/events/useEventParticipants";
+import { useEventQnA } from "@/hooks/events/useEventQnA";
 import { useTheme } from "@/hooks/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
@@ -54,13 +55,18 @@ export default function EventDetailsScreen() {
     refresh: refreshParticipants,
   } = useEventParticipants(id);
 
-  // Compute top question and answer
-  const topQuestion = event?.questions?.length
-    ? [...event.questions].sort(
-        (a, b) => (b.upvotes || 0) - (a.upvotes || 0)
-      )[0]
-    : null;
+  // Use useEventQnA for all QnA logic
+  const {
+    questions,
+    loading: qnaLoading,
+    error: qnaError,
+    refresh: refreshQnA,
+  } = useEventQnA(id);
 
+  // Compute top question and answer from useEventQnA
+  const topQuestion = questions?.length
+    ? [...questions].sort((a, b) => (b.upvotes || 0) - (a.upvotes || 0))[0]
+    : null;
   const topAnswer = topQuestion?.answers?.length
     ? [...topQuestion.answers].sort(
         (a, b) => (b.upvotes || 0) - (a.upvotes || 0)
@@ -457,7 +463,7 @@ export default function EventDetailsScreen() {
                   color: theme.colors.text,
                 }}
               >
-                Event QnA
+                Top Question
               </ThemeText>
               <TouchableOpacity onPress={() => setQnASheetOpen(true)}>
                 <ThemeText
@@ -469,30 +475,67 @@ export default function EventDetailsScreen() {
               </TouchableOpacity>
             </View>
             {topQuestion ? (
-              <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-                <ThemeText
-                  style={{ fontWeight: "bold", color: theme.colors.text }}
-                >
+              <TouchableOpacity
+                onPress={() => setQnASheetOpen(true)}
+                style={[
+                  styles.topQuestionCard,
+                  { backgroundColor: theme.colors.cardBackground },
+                ]}
+              >
+                <View style={styles.topQuestionHeader}>
+                  <Avatar
+                    uri={topQuestion.user?.image_url}
+                    size={24}
+                    style={{ marginRight: 8 }}
+                  />
+                  <ThemeText style={styles.topQuestionUsername}>
+                    {topQuestion.user?.username}
+                  </ThemeText>
+                  <View style={styles.topQuestionStats}>
+                    <Ionicons
+                      name="arrow-up-circle"
+                      size={16}
+                      color={theme.colors.primary}
+                    />
+                    <ThemeText style={styles.topQuestionUpvotes}>
+                      {topQuestion.upvotes || 0}
+                    </ThemeText>
+                  </View>
+                </View>
+                <ThemeText style={styles.topQuestionText} numberOfLines={2}>
                   {topQuestion.question}
                 </ThemeText>
                 {topAnswer && (
-                  <View style={{ marginTop: 4 }}>
-                    <ThemeText style={{ color: theme.colors.text }}>
+                  <View style={styles.topAnswerContainer}>
+                    <View style={styles.topAnswerHeader}>
+                      <Avatar
+                        uri={topAnswer.user?.image_url}
+                        size={20}
+                        style={{ marginRight: 6 }}
+                      />
+                      <ThemeText style={styles.topAnswerUsername}>
+                        {topAnswer.user?.username}
+                      </ThemeText>
+                    </View>
+                    <ThemeText style={styles.topAnswerText} numberOfLines={2}>
                       {topAnswer.answer}
                     </ThemeText>
-                    <ThemeText
-                      style={{
-                        fontSize: 12,
-                        color: theme.colors.text,
-                        marginTop: 2,
-                      }}
-                    >
-                      {topAnswer.upvotes} upvotes •{" "}
-                      {topQuestion.answers?.length || 0} answers
-                    </ThemeText>
+                    <View style={styles.topAnswerStats}>
+                      <Ionicons
+                        name="arrow-up-circle"
+                        size={14}
+                        color={theme.colors.primary}
+                      />
+                      <ThemeText style={styles.topAnswerUpvotes}>
+                        {topAnswer.upvotes || 0}
+                      </ThemeText>
+                      <ThemeText style={styles.topAnswerCount}>
+                        • {topQuestion.answers?.length || 0} answers
+                      </ThemeText>
+                    </View>
                   </View>
                 )}
-              </View>
+              </TouchableOpacity>
             ) : (
               <ThemeText
                 style={{ paddingHorizontal: 16, color: theme.colors.text }}
@@ -521,6 +564,7 @@ export default function EventDetailsScreen() {
         canAsk={event.permissions?.canAnswerQnA}
         canAnswer={event.permissions?.canAnswerQnA}
         onQuestionAdded={refreshEvent}
+        questions={questions}
       />
 
       <EventParticipantsModal
@@ -676,5 +720,68 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     marginBottom: 0,
+  },
+  topQuestionCard: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.1)",
+  },
+  topQuestionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  topQuestionUsername: {
+    fontSize: 14,
+    fontWeight: "500",
+    flex: 1,
+  },
+  topQuestionStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  topQuestionUpvotes: {
+    fontSize: 14,
+    color: "#666",
+  },
+  topQuestionText: {
+    fontSize: 16,
+    fontWeight: "500",
+    marginBottom: 8,
+  },
+  topAnswerContainer: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.1)",
+    paddingTop: 8,
+  },
+  topAnswerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  topAnswerUsername: {
+    fontSize: 13,
+    color: "#666",
+  },
+  topAnswerText: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  topAnswerStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  topAnswerUpvotes: {
+    fontSize: 13,
+    color: "#666",
+  },
+  topAnswerCount: {
+    fontSize: 13,
+    color: "#666",
   },
 });

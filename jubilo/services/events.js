@@ -89,6 +89,49 @@ export const getEvents = async ({
 
 export const getEventDetails = async (eventId, currentUserId = null) => {
   try {
+    // First, check if the event exists and get basic info
+    const { data: basicEvent, error: basicError } = await supabase
+      .from("events")
+      .select("id, is_private, creator_id")
+      .eq("id", eventId)
+      .single();
+
+    if (basicError) throw basicError;
+    if (!basicEvent) throw new Error("Event not found");
+
+    // For private events, check permissions
+    if (basicEvent.is_private) {
+      // Check if user is the creator
+      const isCreator = currentUserId === basicEvent.creator_id;
+      if (isCreator) {
+        // Creator can always view their own events
+      } else {
+        // Check if user is invited or a participant
+        const { data: invitation, error: inviteError } = await supabase
+          .from("event_invitations")
+          .select("status")
+          .eq("event_id", eventId)
+          .eq("user_id", currentUserId)
+          .single();
+
+        const { data: participant, error: participantError } = await supabase
+          .from("event_participants")
+          .select("status")
+          .eq("event_id", eventId)
+          .eq("user_id", currentUserId)
+          .single();
+
+        if (inviteError && inviteError.code !== "PGRST116") throw inviteError;
+        if (participantError && participantError.code !== "PGRST116")
+          throw participantError;
+
+        // If user is not invited or a participant, they can't view the event
+        if (!invitation && !participant) {
+          throw new Error("You don't have permission to view this event");
+        }
+      }
+    }
+
     // Fetch all event details in one query
     const { data, error } = await supabase
       .from("events")
@@ -420,64 +463,6 @@ export const getEventInvites = async (eventId) => {
   }
 };
 
-export const createEventQuestion = async (eventId, question) => {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user?.id) throw new Error("You must be logged in to ask questions.");
-  try {
-    const { data, error } = await supabase
-      .from("event_questions")
-      .insert({
-        event_id: eventId,
-        user_id: user.id,
-        question,
-      })
-      .select(
-        `
-        *,
-        user:profiles!user_id(username)
-      `
-      )
-      .single();
-
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error("Error creating event question:", error);
-    throw error;
-  }
-};
-
-export const answerEventQuestion = async (questionId, answer) => {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user?.id) throw new Error("You must be logged in to answer questions.");
-  try {
-    const { data, error } = await supabase
-      .from("event_answers")
-      .insert({
-        question_id: questionId,
-        user_id: user.id,
-        answer,
-      })
-      .select(
-        `
-        *,
-        user:profiles!user_id(username)
-      `
-      )
-      .single();
-
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error("Error answering event question:", error);
-    throw error;
-  }
-};
-
 export const createEventPost = async (eventId, content) => {
   const {
     data: { user },
@@ -650,31 +635,6 @@ export const getEventImages = async (eventId) => {
     return data;
   } catch (error) {
     console.error("Error fetching event images:", error);
-    throw error;
-  }
-};
-
-export const getEventQuestions = async (eventId) => {
-  try {
-    const { data, error } = await supabase
-      .from("event_questions")
-      .select(
-        `
-        *,
-        user:profiles!user_id(username),
-        answers:event_answers(
-          *,
-          user:profiles!user_id(username)
-        )
-      `
-      )
-      .eq("event_id", eventId)
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error("Error fetching event questions:", error);
     throw error;
   }
 };

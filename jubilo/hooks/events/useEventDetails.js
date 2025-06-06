@@ -121,12 +121,68 @@ export function useEventDetails(eventId) {
       )
       .subscribe();
 
+    // Subscribe to image changes
+    const imageSubscription = supabase
+      .channel(`event_images:${eventId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "event_images",
+          filter: `event_id=eq.${eventId}`,
+        },
+        () => {
+          fetchEventDetails(true);
+        }
+      )
+      .subscribe();
+
+    // Subscribe to question changes
+    const questionSubscription = supabase
+      .channel(`event_questions:${eventId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "event_questions",
+          filter: `event_id=eq.${eventId}`,
+        },
+        () => {
+          fetchEventDetails(true);
+        }
+      )
+      .subscribe();
+
+    // Subscribe to answer changes
+    const answerSubscription = supabase
+      .channel(`event_answers:${eventId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "event_answers",
+          filter: `question_id=in.(${event?.questions
+            ?.map((q) => q.id)
+            .join(",")})`,
+        },
+        () => {
+          fetchEventDetails(true);
+        }
+      )
+      .subscribe();
+
     return () => {
       eventSubscription.unsubscribe();
       participantSubscription.unsubscribe();
       invitationSubscription.unsubscribe();
+      imageSubscription.unsubscribe();
+      questionSubscription.unsubscribe();
+      answerSubscription.unsubscribe();
     };
-  }, [eventId]);
+  }, [eventId, event?.questions]);
 
   useEffect(() => {
     if (eventId && user?.id) {

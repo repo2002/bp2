@@ -5,6 +5,7 @@ import { useTheme } from "@/hooks/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -13,6 +14,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+const SORT_OPTIONS = [
+  { label: "Most Upvoted", value: "upvotes" },
+  { label: "Most Recent", value: "recent" },
+  { label: "Most Answered", value: "answers" },
+];
 
 export default function EventQnA({
   eventId,
@@ -34,9 +41,12 @@ export default function EventQnA({
     refresh,
     upvoted,
   } = useEventQnA(eventId);
+
   const [expanded, setExpanded] = useState({});
   const [newQuestion, setNewQuestion] = useState("");
   const [answerInputs, setAnswerInputs] = useState({});
+  const [sortBy, setSortBy] = useState("upvotes");
+  const [upvoting, setUpvoting] = useState({});
 
   const handleExpand = (questionId) => {
     setExpanded((prev) => ({ ...prev, [questionId]: !prev[questionId] }));
@@ -47,7 +57,6 @@ export default function EventQnA({
     try {
       await postQuestion(newQuestion.trim());
       setNewQuestion("");
-      onQuestionAdded?.();
     } catch (err) {
       console.error("Error posting question:", err);
     }
@@ -65,11 +74,14 @@ export default function EventQnA({
   };
 
   const handleUpvote = async (questionId) => {
+    if (upvoting[questionId]) return;
+    setUpvoting((prev) => ({ ...prev, [questionId]: true }));
     try {
       await upvoteQuestion(questionId);
-      console.log("upvoted", upvoted);
     } catch (err) {
       console.error("Error upvoting question:", err);
+    } finally {
+      setUpvoting((prev) => ({ ...prev, [questionId]: false }));
     }
   };
 
@@ -90,18 +102,41 @@ export default function EventQnA({
     </View>
   );
 
+  const sortedQuestions = [...questions].sort((a, b) => {
+    switch (sortBy) {
+      case "upvotes":
+        return (b.upvotes || 0) - (a.upvotes || 0);
+      case "recent":
+        return new Date(b.created_at) - new Date(a.created_at);
+      case "answers":
+        return (b.answers?.length || 0) - (a.answers?.length || 0);
+      default:
+        return 0;
+    }
+  });
+
   const renderQuestion = ({ item }) => {
-    // Find the most upvoted answer
-    const mostUpvotedAnswer =
-      item.answers && item.answers.length > 0
-        ? [...item.answers].sort((a, b) => b.upvotes - a.upvotes)[0]
-        : null;
+    const isMostUpvoted =
+      sortBy === "upvotes" &&
+      item.upvotes > 0 &&
+      sortedQuestions[0]?.id === item.id;
+    const isMostAnswered =
+      sortBy === "answers" &&
+      item.answers?.length > 0 &&
+      sortedQuestions[0]?.id === item.id;
+    const isMostRecent =
+      sortBy === "recent" && sortedQuestions[0]?.id === item.id;
+
     return (
       <View
         style={[
           styles.threadContainer,
           {
             borderBottomColor: theme.colors.text,
+            backgroundColor:
+              isMostUpvoted || isMostAnswered || isMostRecent
+                ? theme.colors.cardBackground
+                : undefined,
           },
         ]}
       >
@@ -119,37 +154,61 @@ export default function EventQnA({
                 {new Date(item.created_at).toLocaleDateString()}
               </ThemeText>
               <View style={styles.statsRow}>
-                <TouchableOpacity onPress={() => handleUpvote(item.id)}>
-                  <Ionicons
-                    name={
-                      upvoted[item.id]
-                        ? "arrow-up-circle"
-                        : "arrow-up-circle-outline"
-                    }
-                    size={20}
-                    color={
-                      upvoted[item.id]
-                        ? theme.colors.primary
-                        : theme.colors.text
-                    }
-                  />
+                <TouchableOpacity
+                  onPress={() => handleUpvote(item.id)}
+                  disabled={upvoting[item.id]}
+                  style={{ padding: 4 }}
+                >
+                  {upvoting[item.id] ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={theme.colors.primary}
+                    />
+                  ) : (
+                    <Ionicons
+                      name={
+                        upvoted[item.id]
+                          ? "arrow-up-circle"
+                          : "arrow-up-circle-outline"
+                      }
+                      size={20}
+                      color={
+                        upvoted[item.id]
+                          ? theme.colors.primary
+                          : theme.colors.text
+                      }
+                    />
+                  )}
                 </TouchableOpacity>
-                <ThemeText style={{ ...styles.stat, color: theme.colors.text }}>
+                <ThemeText
+                  style={[
+                    styles.stat,
+                    {
+                      color: upvoted[item.id]
+                        ? theme.colors.primary
+                        : theme.colors.text,
+                    },
+                  ]}
+                >
                   {item.upvotes || 0}
                 </ThemeText>
-                <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={16}
-                  color={theme.colors.primary}
-                  style={{ marginLeft: 8 }}
+                <TouchableOpacity
                   onPress={() => handleExpand(item.id)}
-                />
+                  style={{ padding: 4 }}
+                >
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={16}
+                    color={theme.colors.primary}
+                    style={{ marginLeft: 8 }}
+                  />
+                </TouchableOpacity>
                 <ThemeText style={styles.stat}>
                   {item.answers?.length || 0}
                 </ThemeText>
               </View>
             </View>
-            {mostUpvotedAnswer && !expanded[item.id] && (
+            {item.answers?.length > 0 && !expanded[item.id] && (
               <View style={styles.mostUpvotedAnswerRow}>
                 <Ionicons
                   name="arrow-forward"
@@ -161,17 +220,21 @@ export default function EventQnA({
                   style={{ color: theme.colors.text, flex: 1 }}
                   numberOfLines={1}
                 >
-                  {mostUpvotedAnswer.answer}
+                  {item.answers[0].answer}
                 </ThemeText>
               </View>
             )}
           </View>
-          <Ionicons
-            name={expanded[item.id] ? "chevron-up" : "chevron-down"}
-            size={20}
-            color={theme.colors.text}
+          <TouchableOpacity
             onPress={() => handleExpand(item.id)}
-          />
+            style={{ padding: 4 }}
+          >
+            <Ionicons
+              name={expanded[item.id] ? "chevron-up" : "chevron-down"}
+              size={20}
+              color={theme.colors.text}
+            />
+          </TouchableOpacity>
         </View>
         {expanded[item.id] && (
           <View
@@ -230,8 +293,36 @@ export default function EventQnA({
       keyboardVerticalOffset={80}
     >
       <View style={{ flex: 1 }}>
+        <View style={styles.sortRow}>
+          {SORT_OPTIONS.map((option) => (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.sortButton,
+                {
+                  backgroundColor:
+                    sortBy === option.value
+                      ? theme.colors.primary
+                      : theme.colors.cardBackground,
+                },
+              ]}
+              onPress={() => setSortBy(option.value)}
+            >
+              <ThemeText
+                style={[
+                  styles.sortButtonText,
+                  {
+                    color: sortBy === option.value ? "#fff" : theme.colors.text,
+                  },
+                ]}
+              >
+                {option.label}
+              </ThemeText>
+            </TouchableOpacity>
+          ))}
+        </View>
         <FlatList
-          data={questions}
+          data={sortedQuestions}
           keyExtractor={(item) => item.id?.toString()}
           renderItem={renderQuestion}
           contentContainerStyle={{ paddingVertical: 8 }}
@@ -291,10 +382,23 @@ export default function EventQnA({
 }
 
 const styles = StyleSheet.create({
+  sortRow: {
+    flexDirection: "row",
+    padding: 8,
+    gap: 8,
+  },
+  sortButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  sortButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
   askRow: {
     flexDirection: "row",
     alignItems: "center",
-
     paddingVertical: 8,
     gap: 8,
     borderTopWidth: 1,
@@ -312,14 +416,15 @@ const styles = StyleSheet.create({
   },
   threadContainer: {
     marginBottom: 16,
-
     overflow: "hidden",
     borderWidth: 0.5,
+    borderRadius: 8,
+    marginHorizontal: 8,
   },
   questionRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 8,
+    padding: 12,
   },
   questionText: {
     fontSize: 16,
@@ -340,11 +445,9 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
   },
   stat: {
     fontSize: 13,
-    color: "#888",
     marginLeft: 2,
   },
   answersContainer: {
@@ -378,6 +481,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 6,
     marginBottom: 2,
-    marginLeft: 0,
   },
 });

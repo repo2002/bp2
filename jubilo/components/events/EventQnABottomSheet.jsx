@@ -12,7 +12,7 @@ export default function EventQnABottomSheet({
   onQuestionAdded,
 }) {
   const sheetRef = useRef(null);
-  const snapPoints = useMemo(() => ["60%", "90%"], []);
+  const snapPoints = useMemo(() => ["90%"], []);
 
   return (
     <BottomSheetModal

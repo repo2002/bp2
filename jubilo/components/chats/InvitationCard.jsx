@@ -1,9 +1,9 @@
 import { useTheme } from "@/hooks/theme";
 import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
-import * as FileSystem from "expo-file-system";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function InvitationCard({
   event,
@@ -13,39 +13,10 @@ export default function InvitationCard({
   currentUserId,
 }) {
   const theme = useTheme();
+  const router = useRouter();
   const isInvitee = currentUserId === event.user_id;
   const [latestStatus, setLatestStatus] = useState(status);
   const [loading, setLoading] = useState(false);
-  const [cachedImageUri, setCachedImageUri] = useState(null);
-
-  // Cache image on component mount
-  useEffect(() => {
-    if (event.image_url) {
-      cacheImage(event.image_url);
-    }
-  }, [event.image_url]);
-
-  // Cache image function
-  const cacheImage = async (uri) => {
-    try {
-      const filename = uri.split("/").pop();
-      const path = `${FileSystem.cacheDirectory}${filename}`;
-
-      // Check if image is already cached
-      const info = await FileSystem.getInfoAsync(path);
-      if (info.exists) {
-        setCachedImageUri(path);
-        return;
-      }
-
-      // Download and cache image
-      await FileSystem.downloadAsync(uri, path);
-      setCachedImageUri(path);
-    } catch (error) {
-      console.error("Error caching image:", error);
-      setCachedImageUri(uri); // Fallback to original URL
-    }
-  };
 
   // Fetch latest status from DB
   useEffect(() => {
@@ -86,6 +57,13 @@ export default function InvitationCard({
     }
   };
 
+  const handleTitlePress = () => {
+    router.push({
+      pathname: `/events/${event.eventId}`,
+      params: { eventTitle: event.title },
+    });
+  };
+
   const formatDate = (dateString) => {
     try {
       const date = new Date(dateString);
@@ -105,31 +83,24 @@ export default function InvitationCard({
     <View
       style={[styles.card, { backgroundColor: theme.colors.cardBackground }]}
     >
-      {/* Use cached image if available */}
-      {event.image_url ? (
-        <Image
-          source={{ uri: cachedImageUri || event.image_url }}
-          style={styles.image}
-          resizeMode="cover"
-        />
-      ) : (
-        <View
-          style={[
-            styles.image,
-            {
-              backgroundColor: theme.colors.greyLight,
-              justifyContent: "center",
-              alignItems: "center",
-            },
-          ]}
-        >
-          <Ionicons name="image" size={48} color={theme.colors.grey} />
-        </View>
-      )}
       <View style={styles.content}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>
-          {event.title}
-        </Text>
+        <TouchableOpacity
+          onPress={handleTitlePress}
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Text style={[styles.title, { color: theme.colors.text }]}>
+            {event.title}
+          </Text>
+          <Ionicons
+            name="arrow-forward-circle"
+            color={theme.colors.primary}
+            size={26}
+          />
+        </TouchableOpacity>
         {event.description && (
           <Text
             style={[styles.desc, { color: theme.colors.grey }]}
@@ -140,23 +111,23 @@ export default function InvitationCard({
         )}
         {event.location?.address && (
           <View style={styles.infoRow}>
-            <Ionicons name="location" size={16} color={theme.colors.grey} />
-            <Text style={[styles.info, { color: theme.colors.grey }]}>
+            <Ionicons name="location" size={16} color={theme.colors.primary} />
+            <Text style={[styles.info, { color: theme.colors.primary }]}>
               {event.location.address}
             </Text>
           </View>
         )}
         <View style={styles.infoRow}>
-          <Ionicons name="calendar" size={16} color={theme.colors.grey} />
-          <Text style={[styles.info, { color: theme.colors.grey }]}>
+          <Ionicons name="calendar" size={16} color={theme.colors.success} />
+          <Text style={[styles.info, { color: theme.colors.success }]}>
             {formatDate(event.start_time)}
           </Text>
         </View>
         {event.end_time && (
           <View style={styles.infoRow}>
-            <Ionicons name="time" size={16} color={theme.colors.grey} />
-            <Text style={[styles.info, { color: theme.colors.grey }]}>
-              Ends: {formatDate(event.end_time)}
+            <Ionicons name="calendar" size={16} color={theme.colors.error} />
+            <Text style={[styles.info, { color: theme.colors.error }]}>
+              {formatDate(event.end_time)}
             </Text>
           </View>
         )}
@@ -219,10 +190,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 2,
-  },
-  image: {
-    width: "100%",
-    height: 160,
   },
   content: {
     padding: 16,
