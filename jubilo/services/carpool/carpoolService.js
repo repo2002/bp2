@@ -1,107 +1,220 @@
-import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "@/lib/supabase";
 
-export const carpoolService = () => {
-  const [carpools, setCarpools] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+export const carpoolService = {
+  async getCarpools(filters = {}) {
+    const { status = "scheduled", ...otherFilters } = filters;
 
-  useEffect(() => {
-    fetchCarpools();
-  }, []);
+    let query = supabase
+      .from("carpools")
+      .select(
+        `
+        *,
+        driver:driver_id (
+          id,
+          username,
+          first_name,
+          last_name,
+          image_url
+        ),
+        car:car_id (
+          id,
+          make,
+          model,
+          color,
+          seats
+        ),
+        passengers:carpool_passengers (
+          id,
+          user_id,
+          status
+        )
+      `
+      )
+      .eq("status", status)
+      .order("departure_time", { ascending: true });
 
-  const fetchCarpools = async () => {
-    try {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from("carpools")
-        .select(
-          `
-          *,
-          driver:driver_id (
+    // Apply additional filters
+    Object.entries(otherFilters).forEach(([key, value]) => {
+      query = query.eq(key, value);
+    });
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  },
+
+  async getCarpool(id) {
+    const { data, error } = await supabase
+      .from("carpools")
+      .select(
+        `
+        *,
+        driver:driver_id (
+          id,
+          username,
+          first_name,
+          last_name,
+          image_url
+        ),
+        car:car_id (
+          id,
+          make,
+          model,
+          color,
+          seats
+        ),
+        passengers:carpool_passengers (
+          id,
+          user_id,
+          status,
+          user:user_id (
             id,
             username,
             first_name,
             last_name,
             image_url
-          ),
-          car:car_id (
-            id,
-            brand,
-            model,
-            color,
-            seats
           )
-        `
         )
-        .eq("status", "scheduled")
-        .order("departure_time", { ascending: true });
+      `
+      )
+      .eq("id", id)
+      .single();
 
-      if (error) throw error;
-      setCarpools(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    if (error) throw error;
+    return data;
+  },
 
-  const createCarpool = async (carpoolData) => {
-    try {
-      const { data, error } = await supabase
-        .from("carpools")
-        .insert([carpoolData])
-        .select()
-        .single();
+  async createCarpool(carpoolData) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
 
-      if (error) throw error;
-      setCarpools((prev) => [data, ...prev]);
-      return data;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    }
-  };
+    const carpool = {
+      ...carpoolData,
+      driver_id: user.id,
+      status: "scheduled",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
 
-  const updateCarpool = async (id, updates) => {
-    try {
-      const { data, error } = await supabase
-        .from("carpools")
-        .update(updates)
-        .eq("id", id)
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from("carpools")
+      .insert([carpool])
+      .select()
+      .single();
 
-      if (error) throw error;
-      setCarpools((prev) =>
-        prev.map((carpool) => (carpool.id === id ? data : carpool))
-      );
-      return data;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    }
-  };
+    if (error) throw error;
+    return data;
+  },
 
-  const deleteCarpool = async (id) => {
-    try {
-      const { error } = await supabase.from("carpools").delete().eq("id", id);
+  async updateCarpool(id, updates) {
+    const { data, error } = await supabase
+      .from("carpools")
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single();
 
-      if (error) throw error;
-      setCarpools((prev) => prev.filter((carpool) => carpool.id !== id));
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    }
-  };
+    if (error) throw error;
+    return data;
+  },
 
-  return {
-    carpools,
-    isLoading,
-    error,
-    createCarpool,
-    updateCarpool,
-    deleteCarpool,
-    refreshCarpools: fetchCarpools,
-  };
+  async deleteCarpool(id) {
+    const { error } = await supabase.from("carpools").delete().eq("id", id);
+
+    if (error) throw error;
+  },
+
+  async joinCarpool(carpoolId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
+
+    const { data, error } = await supabase
+      .from("carpool_passengers")
+      .insert([
+        {
+          carpool_id: carpoolId,
+          user_id: user.id,
+          status: "pending",
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async leaveCarpool(carpoolId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
+
+    const { error } = await supabase
+      .from("carpool_passengers")
+      .delete()
+      .eq("carpool_id", carpoolId)
+      .eq("user_id", user.id);
+
+    if (error) throw error;
+  },
+
+  async updatePassengerStatus(carpoolId, userId, status) {
+    const { data, error } = await supabase
+      .from("carpool_passengers")
+      .update({ status })
+      .eq("carpool_id", carpoolId)
+      .eq("user_id", userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getMyCarpools() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
+
+    const { data, error } = await supabase
+      .from("carpools")
+      .select(
+        `
+        *,
+        car:car_id (
+          id,
+          make,
+          model,
+          color,
+          seats
+        ),
+        passengers:carpool_passengers (
+          id,
+          user_id,
+          status,
+          user:user_id (
+            id,
+            username,
+            first_name,
+            last_name,
+            image_url
+          )
+        )
+      `
+      )
+      .or(`driver_id.eq.${user.id},carpool_passengers.user_id.eq.${user.id}`)
+      .order("departure_time", { ascending: true });
+
+    if (error) throw error;
+    return data;
+  },
 };

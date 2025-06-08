@@ -55,7 +55,13 @@
           "photosPermission": "Jubilo needs access to your photos to let you change your profile picture."
         }
       ],
-      "expo-maps",
+      [
+        "expo-maps",
+        {
+          "requestLocationPermission": true,
+          "locationPermission": "Allow $(PRODUCT_NAME) to use your location"
+        }
+      ],
       "expo-video",
       [
       "expo-audio",

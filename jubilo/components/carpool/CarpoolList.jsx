@@ -1,46 +1,25 @@
-import ThemeText from "@/components/theme/ThemeText";
 import { useTheme } from "@/hooks/theme";
-import { MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import { format } from "date-fns";
 import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
+import ThemeText from "../theme/ThemeText";
+import RouteMap from "./RouteMap";
+
+const formatDate = (dateString) => {
+  const date = new Date(dateString);
+  return format(date, "MMM d, h:mm a");
+};
 
 const EmptyState = () => {
   const theme = useTheme();
   return (
     <View style={styles.emptyState}>
-      <MaterialIcons
-        name="directions-car"
-        size={48}
-        color={theme.colors.grey}
-      />
+      <Ionicons name="car" size={48} color={theme.colors.grey} />
       <ThemeText color={theme.colors.grey} style={styles.emptyStateText}>
         No carpools available
       </ThemeText>
     </View>
   );
-};
-
-const formatDate = (dateString) => {
-  if (!dateString) return "N/A";
-
-  try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "Invalid Date";
-
-    const day = date.getDate().toString().padStart(2, "0");
-    const month = date
-      .toLocaleString("en-US", { month: "short" })
-      .toUpperCase();
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? "pm" : "am";
-    const formattedHours = hours % 12 || 12;
-    const formattedMinutes = minutes.toString().padStart(2, "0");
-
-    return `${day} ${month}, ${formattedHours}:${formattedMinutes} ${ampm}`;
-  } catch (error) {
-    console.error("Error formatting date:", error);
-    return "Invalid Date";
-  }
 };
 
 const CarpoolList = ({ carpools, onCarpoolPress }) => {
@@ -72,7 +51,7 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
                   {carpool.driver.first_name} {carpool.driver.last_name}
                 </ThemeText>
                 <ThemeText color={theme.colors.grey} style={styles.carInfo}>
-                  {carpool.car.brand} {carpool.car.model} • {carpool.car.color}
+                  {carpool.car.make} {carpool.car.model} • {carpool.car.color}
                 </ThemeText>
               </View>
             </View>
@@ -81,47 +60,45 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
                 ${carpool.price}
               </ThemeText>
               <ThemeText color={theme.colors.grey} style={styles.seats}>
-                {carpool.max_seats} seats
+                {
+                  carpool.passengers.filter((p) => p.status === "confirmed")
+                    .length
+                }
+                /{carpool.max_seats} seats
               </ThemeText>
             </View>
           </View>
 
-          <View style={styles.route}>
-            <View style={styles.routePoint}>
-              <MaterialIcons
-                name="location-on"
-                size={20}
-                color={theme.colors.primary}
-              />
-              <View style={styles.routeDetails}>
-                <ThemeText color={theme.colors.text} style={styles.location}>
-                  {carpool.departure_location}
-                </ThemeText>
-                <ThemeText color={theme.colors.grey} style={styles.time}>
-                  {formatDate(carpool.departure_time)}
-                </ThemeText>
-              </View>
+          <RouteMap
+            departure={{
+              latitude: carpool.departure_location.latitude,
+              longitude: carpool.departure_location.longitude,
+              address: carpool.departure_location.address,
+            }}
+            destination={{
+              latitude: carpool.destination_location.latitude,
+              longitude: carpool.destination_location.longitude,
+              address: carpool.destination_location.address,
+            }}
+            style={styles.map}
+          />
+
+          <View style={styles.times}>
+            <View style={styles.timeContainer}>
+              <ThemeText color={theme.colors.grey} style={styles.timeLabel}>
+                Departure
+              </ThemeText>
+              <ThemeText color={theme.colors.text} style={styles.time}>
+                {formatDate(carpool.departure_time)}
+              </ThemeText>
             </View>
-            <View
-              style={[
-                styles.routeLine,
-                { backgroundColor: theme.colors.primary },
-              ]}
-            />
-            <View style={styles.routePoint}>
-              <MaterialIcons
-                name="location-on"
-                size={20}
-                color={theme.colors.primary}
-              />
-              <View style={styles.routeDetails}>
-                <ThemeText color={theme.colors.text} style={styles.location}>
-                  {carpool.destination_location}
-                </ThemeText>
-                <ThemeText color={theme.colors.grey} style={styles.time}>
-                  {formatDate(carpool.destination_time)}
-                </ThemeText>
-              </View>
+            <View style={styles.timeContainer}>
+              <ThemeText color={theme.colors.grey} style={styles.timeLabel}>
+                Arrival
+              </ThemeText>
+              <ThemeText color={theme.colors.text} style={styles.time}>
+                {formatDate(carpool.destination_time)}
+              </ThemeText>
             </View>
           </View>
 
@@ -140,12 +117,12 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
               <View
                 style={[
                   styles.recurringBadge,
-                  { backgroundColor: theme.colors.cardBackground },
+                  { backgroundColor: theme.colors.primary + "20" },
                 ]}
               >
-                <MaterialIcons
+                <Ionicons
                   name="repeat"
-                  size={14}
+                  size={16}
                   color={theme.colors.primary}
                 />
                 <ThemeText
@@ -160,12 +137,12 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
               <View
                 style={[
                   styles.privateBadge,
-                  { backgroundColor: theme.colors.cardBackground },
+                  { backgroundColor: theme.colors.grey + "20" },
                 ]}
               >
-                <MaterialIcons
-                  name="lock"
-                  size={14}
+                <Ionicons
+                  name="lock-closed"
+                  size={16}
                   color={theme.colors.grey}
                 />
                 <ThemeText color={theme.colors.grey} style={styles.privateText}>
@@ -173,6 +150,23 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
                 </ThemeText>
               </View>
             )}
+            <View style={styles.statusBadge}>
+              <ThemeText
+                color={
+                  carpool.status === "scheduled"
+                    ? theme.colors.primary
+                    : carpool.status === "in_progress"
+                    ? theme.colors.warning
+                    : carpool.status === "completed"
+                    ? theme.colors.success
+                    : theme.colors.error
+                }
+                style={styles.statusText}
+              >
+                {carpool.status.charAt(0).toUpperCase() +
+                  carpool.status.slice(1)}
+              </ThemeText>
+            </View>
           </View>
         </TouchableOpacity>
       ))}
@@ -238,30 +232,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 2,
   },
-  route: {
+  map: {
     marginBottom: 16,
   },
-  routePoint: {
+  times: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 8,
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
-  routeDetails: {
-    marginLeft: 8,
+  timeContainer: {
     flex: 1,
   },
-  location: {
-    fontSize: 14,
+  timeLabel: {
+    fontSize: 12,
+    marginBottom: 2,
   },
   time: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  routeLine: {
-    width: 2,
-    height: 24,
-    marginLeft: 9,
-    marginBottom: 8,
+    fontSize: 14,
+    fontWeight: "500",
   },
   description: {
     fontSize: 14,
@@ -270,6 +258,8 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
   },
   recurringBadge: {
     flexDirection: "row",
@@ -277,7 +267,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    marginRight: 8,
   },
   recurringText: {
     fontSize: 12,
@@ -293,6 +282,13 @@ const styles = StyleSheet.create({
   privateText: {
     fontSize: 12,
     marginLeft: 4,
+  },
+  statusBadge: {
+    marginLeft: "auto",
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
 });
 
