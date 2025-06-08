@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import EmptyState from "../EmptyState";
 
-export default function CarList({ cars }) {
+export default function CarList({ cars, selectedCarId, onSelectCar }) {
   const theme = useTheme();
   const [carsWithImages, setCarsWithImages] = useState([]);
 
@@ -92,14 +92,18 @@ export default function CarList({ cars }) {
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.listContainer}
       renderItem={({ item }) => (
-        <View
-          //onPress={() => handleCarPress(item)}
+        <TouchableOpacity
+          onPress={onSelectCar ? () => onSelectCar(item) : undefined}
           style={[styles.carItem]}
         >
           <View
             style={[
               styles.carContent,
               { backgroundColor: theme.colors.cardBackground },
+              selectedCarId === item.id && {
+                borderWidth: 2,
+                borderColor: theme.colors.primary,
+              },
             ]}
           >
             <View style={styles.imageContainer}>
@@ -140,7 +144,7 @@ export default function CarList({ cars }) {
               {renderCarInfo("card-text", "License Plate", item.license_plate)}
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
       )}
     />
   );

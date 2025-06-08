@@ -40,35 +40,6 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
           ]}
           onPress={() => onCarpoolPress(carpool)}
         >
-          <View style={styles.header}>
-            <View style={styles.driverInfo}>
-              <Image
-                source={{ uri: carpool.driver.image_url }}
-                style={styles.driverImage}
-              />
-              <View>
-                <ThemeText color={theme.colors.text} style={styles.driverName}>
-                  {carpool.driver.first_name} {carpool.driver.last_name}
-                </ThemeText>
-                <ThemeText color={theme.colors.grey} style={styles.carInfo}>
-                  {carpool.car.make} {carpool.car.model} • {carpool.car.color}
-                </ThemeText>
-              </View>
-            </View>
-            <View style={styles.priceContainer}>
-              <ThemeText color={theme.colors.primary} style={styles.price}>
-                ${carpool.price}
-              </ThemeText>
-              <ThemeText color={theme.colors.grey} style={styles.seats}>
-                {
-                  carpool.passengers.filter((p) => p.status === "confirmed")
-                    .length
-                }
-                /{carpool.max_seats} seats
-              </ThemeText>
-            </View>
-          </View>
-
           <RouteMap
             departure={{
               latitude: carpool.departure_location.latitude,
@@ -80,92 +51,127 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
               longitude: carpool.destination_location.longitude,
               address: carpool.destination_location.address,
             }}
-            style={styles.map}
           />
-
-          <View style={styles.times}>
-            <View style={styles.timeContainer}>
-              <ThemeText color={theme.colors.grey} style={styles.timeLabel}>
-                Departure
-              </ThemeText>
-              <ThemeText color={theme.colors.text} style={styles.time}>
-                {formatDate(carpool.departure_time)}
-              </ThemeText>
-            </View>
-            <View style={styles.timeContainer}>
-              <ThemeText color={theme.colors.grey} style={styles.timeLabel}>
-                Arrival
-              </ThemeText>
-              <ThemeText color={theme.colors.text} style={styles.time}>
-                {formatDate(carpool.destination_time)}
-              </ThemeText>
-            </View>
-          </View>
-
-          {carpool.description && (
-            <ThemeText
-              color={theme.colors.grey}
-              style={styles.description}
-              numberOfLines={2}
-            >
-              {carpool.description}
-            </ThemeText>
-          )}
-
-          <View style={styles.footer}>
-            {carpool.is_recurring && (
-              <View
-                style={[
-                  styles.recurringBadge,
-                  { backgroundColor: theme.colors.primary + "20" },
-                ]}
-              >
-                <Ionicons
-                  name="repeat"
-                  size={16}
-                  color={theme.colors.primary}
+          <View style={{ padding: 16 }}>
+            <View style={styles.header}>
+              <View style={styles.driverInfo}>
+                <Image
+                  source={{ uri: carpool.driver.image_url }}
+                  style={styles.driverImage}
                 />
-                <ThemeText
-                  color={theme.colors.primary}
-                  style={styles.recurringText}
-                >
-                  Recurring
+                <View>
+                  <ThemeText
+                    color={theme.colors.text}
+                    style={styles.driverName}
+                  >
+                    {carpool.driver.first_name} {carpool.driver.last_name}
+                  </ThemeText>
+                  <ThemeText color={theme.colors.grey} style={styles.carInfo}>
+                    {carpool.car.make} {carpool.car.model} • {carpool.car.color}
+                  </ThemeText>
+                </View>
+              </View>
+              <View style={styles.priceContainer}>
+                <ThemeText color={theme.colors.primary} style={styles.price}>
+                  ${carpool.price}
+                </ThemeText>
+                <ThemeText color={theme.colors.grey} style={styles.seats}>
+                  {
+                    carpool.passengers.filter((p) => p.status === "confirmed")
+                      .length
+                  }
+                  /{carpool.max_seats} seats
                 </ThemeText>
               </View>
-            )}
-            {carpool.is_private && (
-              <View
-                style={[
-                  styles.privateBadge,
-                  { backgroundColor: theme.colors.grey + "20" },
-                ]}
-              >
-                <Ionicons
-                  name="lock-closed"
-                  size={16}
-                  color={theme.colors.grey}
-                />
-                <ThemeText color={theme.colors.grey} style={styles.privateText}>
-                  Private
+            </View>
+
+            <View style={styles.times}>
+              <View style={styles.timeContainer}>
+                <ThemeText color={theme.colors.grey} style={styles.timeLabel}>
+                  Departure
+                </ThemeText>
+                <ThemeText color={theme.colors.text} style={styles.time}>
+                  {formatDate(carpool.departure_time)}
                 </ThemeText>
               </View>
-            )}
-            <View style={styles.statusBadge}>
+              <View style={styles.timeContainer}>
+                <ThemeText color={theme.colors.grey} style={styles.timeLabel}>
+                  Arrival
+                </ThemeText>
+                <ThemeText color={theme.colors.text} style={styles.time}>
+                  {formatDate(carpool.destination_time)}
+                </ThemeText>
+              </View>
+            </View>
+
+            {carpool.description && (
               <ThemeText
-                color={
-                  carpool.status === "scheduled"
-                    ? theme.colors.primary
-                    : carpool.status === "in_progress"
-                    ? theme.colors.warning
-                    : carpool.status === "completed"
-                    ? theme.colors.success
-                    : theme.colors.error
-                }
-                style={styles.statusText}
+                color={theme.colors.grey}
+                style={styles.description}
+                numberOfLines={2}
               >
-                {carpool.status.charAt(0).toUpperCase() +
-                  carpool.status.slice(1)}
+                {carpool.description}
               </ThemeText>
+            )}
+
+            <View style={styles.footer}>
+              {carpool.is_recurring && (
+                <View
+                  style={[
+                    styles.recurringBadge,
+                    { backgroundColor: theme.colors.primary + "20" },
+                  ]}
+                >
+                  <Ionicons
+                    name="repeat"
+                    size={16}
+                    color={theme.colors.primary}
+                  />
+                  <ThemeText
+                    color={theme.colors.primary}
+                    style={styles.recurringText}
+                  >
+                    Recurring
+                  </ThemeText>
+                </View>
+              )}
+              {carpool.is_private && (
+                <View
+                  style={[
+                    styles.privateBadge,
+                    { backgroundColor: theme.colors.grey + "20" },
+                  ]}
+                >
+                  <Ionicons
+                    name="lock-closed"
+                    size={16}
+                    color={theme.colors.grey}
+                  />
+                  <ThemeText
+                    color={theme.colors.grey}
+                    style={styles.privateText}
+                  >
+                    Private
+                  </ThemeText>
+                </View>
+              )}
+              <View style={styles.statusBadge}>
+                <ThemeText
+                  color={
+                    carpool.status === "scheduled"
+                      ? theme.colors.primary
+                      : carpool.status === "in_progress"
+                      ? theme.colors.warning
+                      : carpool.status === "completed"
+                      ? theme.colors.success
+                      : theme.colors.error
+                  }
+                  style={styles.statusText}
+                >
+                  {carpool.status.charAt(0).toUpperCase() +
+                    carpool.status.slice(1)}
+                </ThemeText>
+              </View>
             </View>
           </View>
         </TouchableOpacity>
@@ -189,7 +195,6 @@ const styles = StyleSheet.create({
   },
   carpoolCard: {
     borderRadius: 12,
-    padding: 16,
     marginBottom: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -232,9 +237,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 2,
   },
-  map: {
-    marginBottom: 16,
-  },
+
   times: {
     flexDirection: "row",
     justifyContent: "space-between",

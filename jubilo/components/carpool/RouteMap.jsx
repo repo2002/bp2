@@ -4,7 +4,48 @@ import { StyleSheet, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import MapViewDirections from "react-native-maps-directions";
 
-const RouteMap = ({ departure, destination, style }) => {
+// Minimal map style: hide all labels (including city names)
+const customMapStyle = [
+  {
+    featureType: "all",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "road",
+    elementType: "geometry",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "administrative",
+    elementType: "geometry",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "administrative.country",
+    elementType: "geometry",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "administrative.locality",
+    elementType: "geometry",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "administrative.province",
+    elementType: "geometry",
+    stylers: [{ visibility: "off" }],
+  },
+];
+
+// height: number (optional) - height of the map container in px (default 200)
+const RouteMap = ({
+  departure,
+  destination,
+  style,
+  height = 200,
+  onRouteInfo,
+}) => {
   const theme = useTheme();
   const mapRef = useRef(null);
   const [travelTime, setTravelTime] = useState(null);
@@ -26,14 +67,13 @@ const RouteMap = ({ departure, destination, style }) => {
     : null;
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={[styles.container, { height }, style]}>
       <MapView
         ref={mapRef}
         style={styles.map}
         initialRegion={origin || initialRegion}
         mapType="standard"
-        //customMapStyle={myCustomStyle}
-
+        customMapStyle={customMapStyle}
         showsMyLocationButton={false}
         zoomEnabled={false}
         scrollEnabled={false}
@@ -66,6 +106,10 @@ const RouteMap = ({ departure, destination, style }) => {
             onReady={(result) => {
               setTravelTime(result.duration);
               setDistance(result.distance);
+              onRouteInfo?.({
+                duration: result.duration,
+                distance: result.distance,
+              });
               // Fit the map to the route
               mapRef.current?.fitToCoordinates(result.coordinates, {
                 edgePadding: { top: 40, right: 40, bottom: 40, left: 40 },
@@ -92,7 +136,8 @@ const RouteMap = ({ departure, destination, style }) => {
 const styles = StyleSheet.create({
   container: {
     height: 200,
-    borderRadius: 12,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
     overflow: "hidden",
     marginBottom: 8,
   },
