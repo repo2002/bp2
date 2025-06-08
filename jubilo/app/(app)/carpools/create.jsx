@@ -9,7 +9,10 @@ import { useEffect, useState } from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CarStep from "./steps/CarStep";
+import OptionsStep from "./steps/OptionsStep";
 import RouteStep from "./steps/RouteStep";
+import SeatsStep from "./steps/SeatsStep";
+import SummaryStep from "./steps/SummaryStep";
 
 const CreateCarpoolScreen = () => {
   const theme = useTheme();
@@ -40,9 +43,9 @@ const CreateCarpoolScreen = () => {
   const steps = [
     { key: "car", component: CarStep },
     { key: "route", component: RouteStep },
-    // { key: "seats", component: SeatsStep },
-    // { key: "options", component: OptionsStep },
-    // { key: "summary", component: SummaryStep },
+    { key: "seats", component: SeatsStep },
+    { key: "options", component: OptionsStep },
+    { key: "summary", component: SummaryStep },
   ];
   const [stepIndex, setStepIndex] = useState(0);
   const StepComponent = steps[stepIndex].component;
@@ -166,6 +169,32 @@ const CreateCarpoolScreen = () => {
           setForm={setForm}
           onBack={() => setStepIndex((i) => i - 1)}
           onNext={() => setStepIndex((i) => i + 1)}
+        />
+      )}
+      {stepIndex === 2 && (
+        <SeatsStep
+          form={form}
+          setForm={setForm}
+          onBack={() => setStepIndex((i) => i - 1)}
+          onNext={() => setStepIndex((i) => i + 1)}
+        />
+      )}
+      {stepIndex === 3 && (
+        <OptionsStep
+          form={form}
+          setForm={setForm}
+          onBack={() => setStepIndex((i) => i - 1)}
+          onNext={() => setStepIndex((i) => i + 1)}
+        />
+      )}
+      {stepIndex === 4 && (
+        <SummaryStep
+          form={form}
+          selectedCar={selectedCar}
+          onBack={() => setStepIndex((i) => i - 1)}
+          onSubmit={handleSubmit}
+          submitting={submitting}
+          error={error}
         />
       )}
       {/* Step navigation buttons (Back/Next) can be added here for all steps */}

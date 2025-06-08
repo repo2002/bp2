@@ -1,7 +1,8 @@
+import { getShortContent } from "@/helpers/common";
 import { useTheme } from "@/hooks/theme";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { format } from "date-fns";
-import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 import ThemeText from "../theme/ThemeText";
 import RouteMap from "./RouteMap";
 
@@ -9,6 +10,9 @@ const formatDate = (dateString) => {
   const date = new Date(dateString);
   return format(date, "MMM d, h:mm a");
 };
+
+const getLocationAddress = (loc) =>
+  typeof loc === "string" ? loc : loc?.address || "";
 
 const EmptyState = () => {
   const theme = useTheme();
@@ -31,110 +35,183 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
 
   return (
     <View style={styles.container}>
-      {carpools.map((carpool) => (
-        <TouchableOpacity
-          key={carpool.id}
-          style={[
-            styles.carpoolCard,
-            { backgroundColor: theme.colors.cardBackground },
-          ]}
-          onPress={() => onCarpoolPress(carpool)}
-        >
-          <RouteMap
-            departure={{
-              latitude: carpool.departure_location.latitude,
-              longitude: carpool.departure_location.longitude,
-              address: carpool.departure_location.address,
-            }}
-            destination={{
-              latitude: carpool.destination_location.latitude,
-              longitude: carpool.destination_location.longitude,
-              address: carpool.destination_location.address,
-            }}
-          />
-          <View style={{ padding: 16 }}>
-            <View style={styles.header}>
-              <View style={styles.driverInfo}>
-                <Image
-                  source={{ uri: carpool.driver.image_url }}
-                  style={styles.driverImage}
-                />
-                <View>
-                  <ThemeText
-                    color={theme.colors.text}
-                    style={styles.driverName}
-                  >
-                    {carpool.driver.first_name} {carpool.driver.last_name}
-                  </ThemeText>
-                  <ThemeText color={theme.colors.grey} style={styles.carInfo}>
-                    {carpool.car.make} {carpool.car.model} • {carpool.car.color}
+      {carpools.map((carpool) => {
+        const confirmedSeats =
+          carpool.passengers?.filter((p) => p.status === "confirmed").length ||
+          0;
+        return (
+          <TouchableOpacity
+            key={carpool.id}
+            style={[
+              styles.carpoolCard,
+              { backgroundColor: theme.colors.cardBackground },
+            ]}
+            onPress={() => onCarpoolPress(carpool)}
+          >
+            <RouteMap
+              departure={{
+                latitude: carpool.departure_location.latitude,
+                longitude: carpool.departure_location.longitude,
+                address: getLocationAddress(carpool.departure_location),
+              }}
+              destination={{
+                latitude: carpool.destination_location.latitude,
+                longitude: carpool.destination_location.longitude,
+                address: getLocationAddress(carpool.destination_location),
+              }}
+              height={200}
+              style={{ borderTopLeftRadius: 12, borderTopRightRadius: 12 }}
+            />
+            <View style={{ padding: 16 }}>
+              {/* Price Row */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 8,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Ionicons
+                    name="people-outline"
+                    size={16}
+                    color={theme.colors.primary}
+                    style={{ marginRight: 4 }}
+                  />
+                  <ThemeText color={theme.colors.grey} style={{ fontSize: 14 }}>
+                    {carpool.max_seats}-{confirmedSeats} seats left
                   </ThemeText>
                 </View>
-              </View>
-              <View style={styles.priceContainer}>
                 <ThemeText color={theme.colors.primary} style={styles.price}>
                   ${carpool.price}
                 </ThemeText>
-                <ThemeText color={theme.colors.grey} style={styles.seats}>
-                  {
-                    carpool.passengers.filter((p) => p.status === "confirmed")
-                      .length
-                  }
-                  /{carpool.max_seats} seats
-                </ThemeText>
               </View>
-            </View>
+              {/* Car Info Row */}
 
-            <View style={styles.times}>
-              <View style={styles.timeContainer}>
-                <ThemeText color={theme.colors.grey} style={styles.timeLabel}>
-                  Departure
-                </ThemeText>
-                <ThemeText color={theme.colors.text} style={styles.time}>
-                  {formatDate(carpool.departure_time)}
-                </ThemeText>
-              </View>
-              <View style={styles.timeContainer}>
-                <ThemeText color={theme.colors.grey} style={styles.timeLabel}>
-                  Arrival
-                </ThemeText>
-                <ThemeText color={theme.colors.text} style={styles.time}>
-                  {formatDate(carpool.destination_time)}
-                </ThemeText>
-              </View>
-            </View>
-
-            {carpool.description && (
-              <ThemeText
-                color={theme.colors.grey}
-                style={styles.description}
-                numberOfLines={2}
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: 8,
+                  marginBottom: 8,
+                  justifyContent: "space-between",
+                }}
               >
-                {carpool.description}
-              </ThemeText>
-            )}
-
-            <View style={styles.footer}>
-              {carpool.is_recurring && (
+                {/* Departure Time & Location */}
                 <View
-                  style={[
-                    styles.recurringBadge,
-                    { backgroundColor: theme.colors.primary + "20" },
-                  ]}
+                  style={{
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
                 >
-                  <Ionicons
-                    name="repeat"
-                    size={16}
-                    color={theme.colors.primary}
-                  />
-                  <ThemeText
-                    color={theme.colors.primary}
-                    style={styles.recurringText}
+                  <ThemeText>Departure</ThemeText>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                    }}
                   >
-                    Recurring
-                  </ThemeText>
+                    <Ionicons
+                      name="arrow-up-circle-outline"
+                      size={16}
+                      color={theme.colors.success}
+                      style={{ marginRight: 4 }}
+                    />
+                    <ThemeText
+                      color={theme.colors.text}
+                      style={{ fontSize: 13, marginRight: 8 }}
+                    >
+                      {formatDate(carpool.departure_time)}
+                    </ThemeText>
+                  </View>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name="map-marker-outline"
+                      size={14}
+                      color={theme.colors.success}
+                      style={{ marginRight: 2 }}
+                    />
+                    <ThemeText
+                      color={theme.colors.text}
+                      style={{ fontSize: 13 }}
+                    >
+                      {getShortContent(
+                        getLocationAddress(
+                          carpool.departure_location?.description ||
+                            getLocationAddress(carpool.departure_location)
+                        ),
+                        20
+                      )}
+                    </ThemeText>
+                  </View>
                 </View>
+                {/* Arrival Time & Location */}
+                <View
+                  style={{
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  <ThemeText>Arival</ThemeText>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                    }}
+                  >
+                    <Ionicons
+                      name="flag-outline"
+                      size={16}
+                      color={theme.colors.error}
+                      style={{ marginRight: 4 }}
+                    />
+                    <ThemeText
+                      color={theme.colors.text}
+                      style={{ fontSize: 13, marginRight: 8 }}
+                    >
+                      {formatDate(carpool.destination_time)}
+                    </ThemeText>
+                  </View>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name="map-marker-outline"
+                      size={14}
+                      color={theme.colors.error}
+                      style={{ marginRight: 2 }}
+                    />
+                    <ThemeText
+                      color={theme.colors.text}
+                      style={{ fontSize: 13 }}
+                    >
+                      {getShortContent(
+                        getLocationAddress(
+                          carpool.destination_location?.description ||
+                            getLocationAddress(carpool.destination_location)
+                        ),
+                        20
+                      )}
+                    </ThemeText>
+                  </View>
+                </View>
+              </View>
+
+              {/* Description */}
+              {carpool.description && (
+                <ThemeText
+                  color={theme.colors.grey}
+                  style={styles.description}
+                  numberOfLines={2}
+                >
+                  {carpool.description}
+                </ThemeText>
               )}
+
               {carpool.is_private && (
                 <View
                   style={[
@@ -155,27 +232,10 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
                   </ThemeText>
                 </View>
               )}
-              <View style={styles.statusBadge}>
-                <ThemeText
-                  color={
-                    carpool.status === "scheduled"
-                      ? theme.colors.primary
-                      : carpool.status === "in_progress"
-                      ? theme.colors.warning
-                      : carpool.status === "completed"
-                      ? theme.colors.success
-                      : theme.colors.error
-                  }
-                  style={styles.statusText}
-                >
-                  {carpool.status.charAt(0).toUpperCase() +
-                    carpool.status.slice(1)}
-                </ThemeText>
-              </View>
             </View>
-          </View>
-        </TouchableOpacity>
-      ))}
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 };

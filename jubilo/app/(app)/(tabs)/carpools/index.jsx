@@ -5,6 +5,7 @@ import LoadingIndicator from "@/components/LoadingIndicator";
 import ThemeText from "@/components/theme/ThemeText";
 import { useTheme } from "@/hooks/theme";
 import { supabase } from "@/lib/supabase";
+import { carpoolService } from "@/services/carpool/carpoolService";
 import { carService } from "@/services/carpool/carService";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
@@ -16,244 +17,13 @@ import {
   View,
 } from "react-native";
 
-// Mock data for development
-const MOCK_CARPOOLS = [
-  {
-    id: "1",
-    driver_id: "user1",
-    car_id: "car1",
-    departure_location: {
-      address: "Tel Aviv, Israel",
-      latitude: 32.0853,
-      longitude: 34.7818,
-    },
-    departure_time: "2024-06-08T18:05:00Z",
-    destination_location: {
-      address: "Jerusalem, Israel",
-      latitude: 31.7683,
-      longitude: 35.2137,
-    },
-    destination_time: "2024-06-08T19:05:00Z",
-    max_seats: 3,
-    price: 15,
-    cost: 10,
-    description: "Regular commute to work",
-    is_private: false,
-    is_recurring: true,
-    recurrence_rule: "FREQ=WEEKLY;BYDAY=MO,WE,FR",
-    status: "scheduled",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    driver: {
-      id: "user1",
-      username: "johndoe",
-      first_name: "John",
-      last_name: "Doe",
-      image_url: "https://i.pravatar.cc/150?img=1",
-    },
-    car: {
-      id: "car1",
-      make: "Toyota",
-      model: "Camry",
-      color: "Silver",
-      seats: 5,
-    },
-    passengers: [
-      {
-        id: "pass1",
-        user_id: "user2",
-        status: "confirmed",
-        user: {
-          id: "user2",
-          username: "janedoe",
-          first_name: "Jane",
-          last_name: "Doe",
-          image_url: "https://i.pravatar.cc/150?img=2",
-        },
-      },
-    ],
-  },
-  {
-    id: "2",
-    driver_id: "user3",
-    car_id: "car2",
-    departure_location: {
-      address: "Haifa, Israel",
-      latitude: 32.794,
-      longitude: 34.9896,
-    },
-    departure_time: "2024-06-08T19:05:00Z",
-    destination_location: {
-      address: "Netanya, Israel",
-      latitude: 32.3215,
-      longitude: 34.8532,
-    },
-    destination_time: "2024-06-08T20:05:00Z",
-    max_seats: 2,
-    price: 20,
-    cost: 15,
-    description: "Evening ride to the beach",
-    is_private: false,
-    is_recurring: false,
-    recurrence_rule: null,
-    status: "scheduled",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    driver: {
-      id: "user3",
-      username: "bobsmith",
-      first_name: "Bob",
-      last_name: "Smith",
-      image_url: "https://i.pravatar.cc/150?img=3",
-    },
-    car: {
-      id: "car2",
-      make: "Honda",
-      model: "Civic",
-      color: "Blue",
-      seats: 4,
-    },
-    passengers: [
-      {
-        id: "pass2",
-        user_id: "user4",
-        status: "pending",
-        user: {
-          id: "user4",
-          username: "alicej",
-          first_name: "Alice",
-          last_name: "Johnson",
-          image_url: "https://i.pravatar.cc/150?img=4",
-        },
-      },
-    ],
-  },
-  {
-    id: "3",
-    driver_id: "user5",
-    car_id: "car3",
-    departure_location: "555 Beach Rd, San Francisco",
-    departure_time: new Date(Date.now() + 86400000).toISOString(), // 24 hours from now
-    destination_location: "888 Mountain View, San Francisco",
-    destination_time: new Date(Date.now() + 93600000).toISOString(), // 26 hours from now
-    max_seats: 4,
-    price: 25,
-    cost: 20,
-    description: "Weekend trip to the mountains",
-    is_private: false,
-    is_recurring: false,
-    recurrence_rule: null,
-    status: "scheduled",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    driver: {
-      id: "user5",
-      username: "mikeb",
-      first_name: "Mike",
-      last_name: "Brown",
-      image_url: "https://i.pravatar.cc/150?img=5",
-    },
-    car: {
-      id: "car3",
-      make: "Tesla",
-      model: "Model 3",
-      color: "Red",
-      seats: 5,
-    },
-    passengers: [
-      {
-        id: "pass3",
-        user_id: "user6",
-        status: "confirmed",
-        user: {
-          id: "user6",
-          username: "sarahw",
-          first_name: "Sarah",
-          last_name: "Wilson",
-          image_url: "https://i.pravatar.cc/150?img=6",
-        },
-      },
-      {
-        id: "pass4",
-        user_id: "user7",
-        status: "cancelled",
-        user: {
-          id: "user7",
-          username: "tomh",
-          first_name: "Tom",
-          last_name: "Harris",
-          image_url: "https://i.pravatar.cc/150?img=7",
-        },
-      },
-    ],
-  },
-  {
-    id: "4",
-    driver_id: "user8",
-    car_id: "car4",
-    departure_location: "222 Tech Park, San Francisco",
-    departure_time: new Date(Date.now() + 43200000).toISOString(), // 12 hours from now
-    destination_location: "333 Business Center, San Francisco",
-    destination_time: new Date(Date.now() + 46800000).toISOString(), // 13 hours from now
-    max_seats: 3,
-    price: 18,
-    cost: 12,
-    description: "Daily commute to tech park",
-    is_private: false,
-    is_recurring: true,
-    recurrence_rule: "FREQ=DAILY",
-    status: "in_progress",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    driver: {
-      id: "user8",
-      username: "davidl",
-      first_name: "David",
-      last_name: "Lee",
-      image_url: "https://i.pravatar.cc/150?img=8",
-    },
-    car: {
-      id: "car4",
-      make: "BMW",
-      model: "X5",
-      color: "Black",
-      seats: 5,
-    },
-    passengers: [
-      {
-        id: "pass5",
-        user_id: "user9",
-        status: "confirmed",
-        user: {
-          id: "user9",
-          username: "emilyc",
-          first_name: "Emily",
-          last_name: "Chen",
-          image_url: "https://i.pravatar.cc/150?img=9",
-        },
-      },
-      {
-        id: "pass6",
-        user_id: "user10",
-        status: "confirmed",
-        user: {
-          id: "user10",
-          username: "jamesk",
-          first_name: "James",
-          last_name: "Kim",
-          image_url: "https://i.pravatar.cc/150?img=10",
-        },
-      },
-    ],
-  },
-];
-
 export default function CarpoolScreen() {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState("available");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [cars, setCars] = useState([]);
+  const [carpools, setCarpools] = useState([]);
 
   const fetchCars = async () => {
     try {
@@ -270,6 +40,19 @@ export default function CarpoolScreen() {
     }
   };
 
+  const fetchCarpools = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await carpoolService.getCarpools();
+      setCarpools(data);
+    } catch (err) {
+      setError("Failed to fetch carpools");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Mock loading state
   const handleRefresh = async () => {
     setIsLoading(true);
@@ -278,8 +61,7 @@ export default function CarpoolScreen() {
       if (activeTab === "myCars") {
         await fetchCars();
       } else {
-        // Simulate API call for carpools
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await fetchCarpools();
       }
     } catch (err) {
       setError("Failed to refresh data");
@@ -291,6 +73,8 @@ export default function CarpoolScreen() {
   useEffect(() => {
     if (activeTab === "myCars") {
       fetchCars();
+    } else {
+      fetchCarpools();
     }
   }, [activeTab]);
 
@@ -318,7 +102,7 @@ export default function CarpoolScreen() {
       default:
         return (
           <CarpoolList
-            carpools={MOCK_CARPOOLS}
+            carpools={carpools}
             onCarpoolPress={handleCarpoolPress}
           />
         );
@@ -433,7 +217,9 @@ export default function CarpoolScreen() {
         renderItem={() => renderContent()}
         keyExtractor={() => "content"}
         refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={handleRefresh} />
+          isLoading && activeTab !== "myCars" ? (
+            <RefreshControl refreshing={isLoading} onRefresh={handleRefresh} />
+          ) : null
         }
       />
     </View>
