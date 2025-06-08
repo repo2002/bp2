@@ -1,7 +1,74 @@
 import ThemeText from "@/components/theme/ThemeText";
 import { useTheme } from "@/hooks/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { format } from "date-fns";
 import { ActivityIndicator, TouchableOpacity, View } from "react-native";
+
+const Section = ({ title, children, icon }) => {
+  const theme = useTheme();
+  return (
+    <View style={{ marginBottom: 20 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginBottom: 12,
+          paddingBottom: 8,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.greyLight,
+        }}
+      >
+        {icon}
+        <ThemeText
+          style={{
+            fontSize: 18,
+            fontWeight: "600",
+            color: theme.colors.text,
+            marginLeft: 8,
+          }}
+        >
+          {title}
+        </ThemeText>
+      </View>
+      <View style={{ paddingLeft: 28 }}>{children}</View>
+    </View>
+  );
+};
+
+const InfoRow = ({ icon, label, value, color }) => {
+  const theme = useTheme();
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 10,
+      }}
+    >
+      {icon}
+      <View style={{ flex: 1, marginLeft: 10 }}>
+        <ThemeText
+          style={{
+            fontSize: 14,
+            color: theme.colors.grey,
+            marginBottom: 2,
+          }}
+        >
+          {label}
+        </ThemeText>
+        <ThemeText
+          style={{
+            fontSize: 16,
+            color: color || theme.colors.text,
+            fontWeight: "500",
+          }}
+        >
+          {value}
+        </ThemeText>
+      </View>
+    </View>
+  );
+};
 
 export default function SummaryStep({
   form,
@@ -12,6 +79,36 @@ export default function SummaryStep({
   error,
 }) {
   const theme = useTheme();
+
+  const formatDateTime = (date) => {
+    if (!date) return "-";
+    return format(new Date(date), "MMM d, h:mm a");
+  };
+
+  const getRecurringText = () => {
+    if (!form.is_recurring) return "Not Recurring";
+    if (!form.recurrence_rule) return "Recurring (no schedule)";
+
+    const [freq, days] = form.recurrence_rule.split(";");
+    const frequency = freq.replace("FREQ=", "");
+    const selectedDays = days.replace("BYDAY=", "").split(",");
+
+    const dayLabels = {
+      MO: "Mon",
+      TU: "Tue",
+      WE: "Wed",
+      TH: "Thu",
+      FR: "Fri",
+      SA: "Sat",
+      SU: "Sun",
+    };
+
+    const formattedDays = selectedDays.map((day) => dayLabels[day]).join(", ");
+    return `${
+      frequency.charAt(0).toUpperCase() + frequency.slice(1).toLowerCase()
+    }: ${formattedDays}`;
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       {/* Header */}
@@ -26,6 +123,7 @@ export default function SummaryStep({
           Summary
         </ThemeText>
       </View>
+
       {/* Content */}
       <View
         style={{
@@ -35,219 +133,241 @@ export default function SummaryStep({
           paddingBottom: 80,
         }}
       >
-        {/* Car */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 10,
-          }}
-        >
-          <Ionicons
-            name="car-outline"
-            size={20}
-            color={theme.colors.primary}
-            style={{ marginRight: 10 }}
-          />
-          <ThemeText style={{ fontSize: 16, color: theme.colors.text }}>
-            {selectedCar
-              ? `${selectedCar.make} ${selectedCar.model} (${selectedCar.license_plate})`
-              : "No car selected"}
-          </ThemeText>
-        </View>
-        {/* Route */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 10,
-          }}
-        >
-          <Ionicons
-            name="location-outline"
-            size={20}
-            color={theme.colors.success}
-            style={{ marginRight: 10 }}
-          />
-          <ThemeText style={{ fontSize: 16, color: theme.colors.text }}>
-            {form.departure_location?.description ||
-              form.departure_location?.address ||
-              "-"}
-          </ThemeText>
-        </View>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 10,
-          }}
-        >
-          <MaterialCommunityIcons
-            name="map-marker-outline"
-            size={20}
-            color={theme.colors.error}
-            style={{ marginRight: 10 }}
-          />
-          <ThemeText style={{ fontSize: 16, color: theme.colors.text }}>
-            {form.destination_location?.description ||
-              form.destination_location?.address ||
-              "-"}
-          </ThemeText>
-        </View>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 10,
-          }}
-        >
-          <Ionicons
-            name="time-outline"
-            size={20}
-            color={theme.colors.primary}
-            style={{ marginRight: 10 }}
-          />
-          <ThemeText style={{ fontSize: 16, color: theme.colors.text }}>
-            Departure:{" "}
-            {form.departure_time ? form.departure_time.toLocaleString() : "-"}
-          </ThemeText>
-        </View>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 10,
-          }}
-        >
-          <Ionicons
-            name="flag-outline"
-            size={20}
-            color={theme.colors.primary}
-            style={{ marginRight: 10 }}
-          />
-          <ThemeText style={{ fontSize: 16, color: theme.colors.text }}>
-            Arrival:{" "}
-            {form.destination_time
-              ? form.destination_time.toLocaleString()
-              : "-"}
-          </ThemeText>
-        </View>
-        {/* Seats & Pricing */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 10,
-          }}
-        >
-          <Ionicons
-            name="people-outline"
-            size={20}
-            color={theme.colors.primary}
-            style={{ marginRight: 10 }}
-          />
-          <ThemeText style={{ fontSize: 16, color: theme.colors.text }}>
-            Max Seats: {form.max_seats}
-          </ThemeText>
-        </View>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 10,
-          }}
-        >
-          <MaterialCommunityIcons
-            name="currency-usd"
-            size={20}
-            color={theme.colors.primary}
-            style={{ marginRight: 10 }}
-          />
-          <ThemeText style={{ fontSize: 16, color: theme.colors.text }}>
-            Price: {form.price || "-"}
-          </ThemeText>
-        </View>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 10,
-          }}
-        >
-          <MaterialCommunityIcons
-            name="cash-multiple"
-            size={20}
-            color={theme.colors.primary}
-            style={{ marginRight: 10 }}
-          />
-          <ThemeText style={{ fontSize: 16, color: theme.colors.text }}>
-            Cost: {form.cost || "-"}
-          </ThemeText>
-        </View>
-        {/* Description */}
-        {form.description ? (
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "flex-start",
-              marginBottom: 10,
-            }}
+        {/* Event Section */}
+        {form.event_id && (
+          <Section
+            title="Event"
+            icon={
+              <Ionicons
+                name="calendar"
+                size={24}
+                color={theme.colors.primary}
+              />
+            }
           >
-            <Ionicons
-              name="document-text-outline"
-              size={20}
-              color={theme.colors.primary}
-              style={{ marginRight: 10, marginTop: 2 }}
+            <InfoRow
+              icon={
+                <Ionicons
+                  name="calendar-outline"
+                  size={20}
+                  color={theme.colors.primary}
+                />
+              }
+              label="Event"
+              value={form.event_title}
             />
-            <ThemeText style={{ fontSize: 16, color: theme.colors.text }}>
-              {form.description}
-            </ThemeText>
-          </View>
-        ) : null}
-        {/* Options */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 10,
-          }}
+            <InfoRow
+              icon={
+                <Ionicons
+                  name="time-outline"
+                  size={20}
+                  color={theme.colors.primary}
+                />
+              }
+              label="Event Time"
+              value={formatDateTime(form.event_time)}
+            />
+          </Section>
+        )}
+
+        {/* Vehicle Section */}
+        <Section
+          title="Vehicle"
+          icon={<Ionicons name="car" size={24} color={theme.colors.primary} />}
         >
-          <Ionicons
-            name="lock-closed-outline"
-            size={20}
-            color={theme.colors.primary}
-            style={{ marginRight: 10 }}
+          <InfoRow
+            icon={
+              <Ionicons
+                name="car-outline"
+                size={20}
+                color={theme.colors.primary}
+              />
+            }
+            label="Vehicle"
+            value={
+              selectedCar
+                ? `${selectedCar.make} ${selectedCar.model}`
+                : "No car selected"
+            }
           />
-          <ThemeText style={{ fontSize: 16, color: theme.colors.text }}>
-            {form.is_private ? "Private Carpool" : "Public Carpool"}
-          </ThemeText>
-        </View>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 10,
-          }}
+          {selectedCar && (
+            <InfoRow
+              icon={
+                <MaterialCommunityIcons
+                  name="license"
+                  size={20}
+                  color={theme.colors.primary}
+                />
+              }
+              label="License Plate"
+              value={selectedCar.license_plate}
+            />
+          )}
+        </Section>
+
+        {/* Route Section */}
+        <Section
+          title="Route"
+          icon={<Ionicons name="map" size={24} color={theme.colors.primary} />}
         >
-          <MaterialCommunityIcons
-            name="calendar-repeat"
-            size={20}
-            color={theme.colors.primary}
-            style={{ marginRight: 10 }}
+          <InfoRow
+            icon={
+              <Ionicons
+                name="location-outline"
+                size={20}
+                color={theme.colors.success}
+              />
+            }
+            label="Departure"
+            value={
+              form.departure_location?.description ||
+              form.departure_location?.address ||
+              "-"
+            }
           />
-          <ThemeText style={{ fontSize: 16, color: theme.colors.text }}>
-            {form.is_recurring
-              ? `Recurring: ${form.recurrence_rule || "(no rule)"}`
-              : "Not Recurring"}
-          </ThemeText>
-        </View>
+          <InfoRow
+            icon={
+              <MaterialCommunityIcons
+                name="map-marker-outline"
+                size={20}
+                color={theme.colors.error}
+              />
+            }
+            label="Destination"
+            value={
+              form.destination_location?.description ||
+              form.destination_location?.address ||
+              "-"
+            }
+          />
+          <InfoRow
+            icon={
+              <Ionicons
+                name="time-outline"
+                size={20}
+                color={theme.colors.primary}
+              />
+            }
+            label="Departure Time"
+            value={formatDateTime(form.departure_time)}
+          />
+          <InfoRow
+            icon={
+              <Ionicons
+                name="flag-outline"
+                size={20}
+                color={theme.colors.primary}
+              />
+            }
+            label="Estimated Arrival"
+            value={formatDateTime(form.destination_time)}
+          />
+        </Section>
+
+        {/* Details Section */}
+        <Section
+          title="Details"
+          icon={
+            <Ionicons
+              name="information-circle"
+              size={24}
+              color={theme.colors.primary}
+            />
+          }
+        >
+          <InfoRow
+            icon={
+              <Ionicons
+                name="people-outline"
+                size={20}
+                color={theme.colors.primary}
+              />
+            }
+            label="Available Seats"
+            value={form.max_seats?.toString() || "-"}
+          />
+          <InfoRow
+            icon={
+              <MaterialCommunityIcons
+                name="currency-usd"
+                size={20}
+                color={theme.colors.primary}
+              />
+            }
+            label="Price per Seat"
+            value={form.price ? `$${form.price}` : "-"}
+          />
+          <InfoRow
+            icon={
+              <MaterialCommunityIcons
+                name="cash-multiple"
+                size={20}
+                color={theme.colors.primary}
+              />
+            }
+            label="Total Cost"
+            value={form.cost ? `$${form.cost}` : "-"}
+          />
+          {form.description && (
+            <InfoRow
+              icon={
+                <Ionicons
+                  name="document-text-outline"
+                  size={20}
+                  color={theme.colors.primary}
+                />
+              }
+              label="Description"
+              value={form.description}
+            />
+          )}
+        </Section>
+
+        {/* Options Section */}
+        <Section
+          title="Options"
+          icon={
+            <Ionicons name="options" size={24} color={theme.colors.primary} />
+          }
+        >
+          <InfoRow
+            icon={
+              <Ionicons
+                name="lock-closed-outline"
+                size={20}
+                color={theme.colors.primary}
+              />
+            }
+            label="Visibility"
+            value={form.is_private ? "Private" : "Public"}
+          />
+          <InfoRow
+            icon={
+              <MaterialCommunityIcons
+                name="calendar-refresh"
+                size={20}
+                color={theme.colors.primary}
+              />
+            }
+            label="Schedule"
+            value={getRecurringText()}
+          />
+        </Section>
+
         {/* Error */}
         {error && (
-          <ThemeText style={{ color: theme.colors.error, marginVertical: 8 }}>
+          <ThemeText
+            style={{
+              color: theme.colors.error,
+              marginVertical: 8,
+              textAlign: "center",
+            }}
+          >
             {error}
           </ThemeText>
         )}
       </View>
+
       {/* Navigation Buttons */}
       <View
         style={{
@@ -263,12 +383,12 @@ export default function SummaryStep({
             paddingHorizontal: 32,
             borderRadius: 10,
             alignItems: "center",
-            backgroundColor: theme.colors.grey,
+            backgroundColor: theme.colors.greyDark,
           }}
           onPress={onBack}
           disabled={submitting}
         >
-          <ThemeText color="white" style={{ fontWeight: "bold", fontSize: 16 }}>
+          <ThemeText color="black" style={{ fontWeight: "bold", fontSize: 16 }}>
             Back
           </ThemeText>
         </TouchableOpacity>

@@ -13,10 +13,17 @@ export default function GooglePlacesInput({ onPlaceSelected, onInputChange }) {
           onChangeText: (text) => {
             if (onInputChange) onInputChange(text);
           },
+          returnKeyType: "search",
+          blurOnSubmit: false,
         }}
         onPress={(data, details = null) => {
+          console.log("Place selected:", { data, details });
           if (onPlaceSelected) {
-            onPlaceSelected(data, details);
+            try {
+              onPlaceSelected(data, details);
+            } catch (error) {
+              console.error("Error in onPlaceSelected:", error);
+            }
           }
         }}
         fetchDetails={true}
@@ -27,6 +34,9 @@ export default function GooglePlacesInput({ onPlaceSelected, onInputChange }) {
           language: "en",
         }}
         styles={{
+          container: {
+            flex: 1,
+          },
           textInput: {
             fontSize: 16,
             color: theme.colors.text,
@@ -34,9 +44,35 @@ export default function GooglePlacesInput({ onPlaceSelected, onInputChange }) {
             padding: 0,
             margin: 0,
           },
+          listView: {
+            backgroundColor: theme.colors.cardBackground,
+            position: "absolute",
+            top: 45,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+          },
+          row: {
+            backgroundColor: theme.colors.cardBackground,
+            padding: 13,
+            height: "auto",
+            minHeight: 44,
+          },
+          description: {
+            color: theme.colors.text,
+          },
+          separator: {
+            height: 0.5,
+            backgroundColor: theme.colors.greyLight,
+          },
         }}
         enablePoweredByContainer={false}
         nearbyPlacesAPI="GooglePlacesSearch"
+        onFail={(error) =>
+          console.error("GooglePlacesAutocomplete error:", error)
+        }
+        listViewDisplayed="auto"
+        keepResultsAfterBlur={true}
       />
     </View>
   );

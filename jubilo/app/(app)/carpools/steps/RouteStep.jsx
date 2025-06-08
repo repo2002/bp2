@@ -4,7 +4,7 @@ import ThemeText from "@/components/theme/ThemeText";
 import { useTheme } from "@/hooks/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TouchableOpacity, View } from "react-native";
 
 export default function RouteStep({ form, setForm, onBack, onNext }) {
@@ -34,21 +34,23 @@ export default function RouteStep({ form, setForm, onBack, onNext }) {
         })
       : "Select";
 
-  // When routeDuration and departure_time are set, calculate destination_time
-  if (
-    routeDuration &&
-    form.departure_time &&
-    (!form.destination_time ||
-      Math.abs(
-        form.destination_time.getTime() -
-          (form.departure_time.getTime() + routeDuration * 60 * 1000)
-      ) > 60000) // update if off by more than 1 min
-  ) {
-    const arrival = new Date(
-      form.departure_time.getTime() + routeDuration * 60 * 1000
-    );
-    setForm((f) => ({ ...f, destination_time: arrival }));
-  }
+  // Calculate destination time when route duration or departure time changes
+  useEffect(() => {
+    if (
+      routeDuration &&
+      form.departure_time &&
+      (!form.destination_time ||
+        Math.abs(
+          form.destination_time.getTime() -
+            (form.departure_time.getTime() + routeDuration * 60 * 1000)
+        ) > 60000) // update if off by more than 1 min
+    ) {
+      const arrival = new Date(
+        form.departure_time.getTime() + routeDuration * 60 * 1000
+      );
+      setForm((f) => ({ ...f, destination_time: arrival }));
+    }
+  }, [routeDuration, form.departure_time]);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -228,6 +230,8 @@ export default function RouteStep({ form, setForm, onBack, onNext }) {
             </ThemeText>
           </TouchableOpacity>
         </View>
+
+        {/* Estimated Arrival */}
         {form.destination_time && (
           <View
             style={{
@@ -281,11 +285,11 @@ export default function RouteStep({ form, setForm, onBack, onNext }) {
             paddingHorizontal: 32,
             borderRadius: 10,
             alignItems: "center",
-            backgroundColor: theme.colors.grey,
+            backgroundColor: theme.colors.greyDark,
           }}
           onPress={onBack}
         >
-          <ThemeText color="white" style={{ fontWeight: "bold", fontSize: 16 }}>
+          <ThemeText color="black" style={{ fontWeight: "bold", fontSize: 16 }}>
             Back
           </ThemeText>
         </TouchableOpacity>
