@@ -6,7 +6,7 @@ import { getChatById } from "@/services/chatService";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { TouchableOpacity, useColorScheme, View } from "react-native";
+import { TouchableOpacity, useColorScheme } from "react-native";
 
 const ChatsLayout = () => {
   const theme = useTheme();
@@ -19,9 +19,7 @@ const ChatsLayout = () => {
   const { user } = useAuth();
 
   const handleCreateChat = (data) => {
-    // Close the modal
     setModalVisible(false);
-    // Navigate to the new chat
     router.push(`/chats/${data.id}`);
   };
 
@@ -74,44 +72,32 @@ const ChatsLayout = () => {
               tintColor: theme.colors.text,
               onChangeText: (event) => setSearch(event.nativeEvent.text),
             },
-            headerLeft: () => (
-              <View
-                style={{
-                  backgroundColor: theme.colors.greyLight,
-                  width: 22,
-                  height: 22,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 50,
-                }}
-              >
-                <Ionicons
-                  name="ellipsis-horizontal"
-                  size={20}
-                  color={"black"}
-                  onPress={() => {
-                    // TODO: handle new chat creation
-                  }}
-                />
-              </View>
-            ),
+            // headerLeft: () => (
+            //   <View
+            //     style={{
+            //       backgroundColor: theme.colors.greyLight,
+            //       width: 22,
+            //       height: 22,
+            //       alignItems: "center",
+            //       justifyContent: "center",
+            //       borderRadius: 50,
+            //     }}
+            //   >
+            //     <Ionicons
+            //       name="ellipsis-horizontal"
+            //       size={20}
+            //       color={"black"}
+            //       onPress={() => {
+            //         // TODO: handle new chat creation
+            //       }}
+            //     />
+            //   </View>
+            // ),
             headerRight: () => (
               <TouchableOpacity onPress={() => setModalVisible(true)}>
                 <Ionicons name="add" size={24} color="#007AFF" />
               </TouchableOpacity>
             ),
-          }}
-        />
-        <Stack.Screen
-          name="[id]"
-          options={{
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="[id]/chat-details"
-          options={{
-            headerShown: false,
           }}
         />
       </Stack>

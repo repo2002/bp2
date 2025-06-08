@@ -20,6 +20,20 @@ export default function AppLayout() {
         <Stack.Screen name="post/index" />
         <Stack.Screen name="profile/index" />
         <Stack.Screen name="search/index" />
+        <Stack.Screen name="chats/[id]" />
+        <Stack.Screen name="chats/[id]/chat-details" />
+        <Stack.Screen name="events/[id]" />
+        {/* <Stack.Screen name="events/create" /> */}
+        <Stack.Screen name="events/going" />
+        <Stack.Screen name="events/invitations" />
+        <Stack.Screen name="events/own" />
+        <Stack.Screen name="events/upcoming" />
+        <Stack.Screen name="events/past" />
+        <Stack.Screen name="carpools/[id]" />
+        <Stack.Screen name="carpools/create" />
+        <Stack.Screen name="carpools/add-car" />
+        {/* <Stack.Screen name="cars/[id]/index" /> */}
+        <Stack.Screen name="cars/[id]/edit" />
       </Stack>
       <CommentBottomSheet />
       <ShareBottomSheet />

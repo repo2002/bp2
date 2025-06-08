@@ -1,13 +1,17 @@
+import CarList from "@/components/carpool/CarList";
 import CarpoolList from "@/components/carpool/CarpoolList";
 import ErrorMessage from "@/components/ErrorMessage";
 import LoadingIndicator from "@/components/LoadingIndicator";
-import { Stack, router } from "expo-router";
-import { useState } from "react";
+import ThemeText from "@/components/theme/ThemeText";
+import { useTheme } from "@/hooks/theme";
+import { supabase } from "@/lib/supabase";
+import { carService } from "@/services/carpool/carService";
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   FlatList,
   RefreshControl,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -78,30 +82,58 @@ const MOCK_CARPOOLS = [
 ];
 
 export default function CarpoolScreen() {
+  const theme = useTheme();
   const [activeTab, setActiveTab] = useState("available");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [cars, setCars] = useState([]);
+
+  const fetchCars = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const userCars = await carService.getCars(user.id);
+      setCars(userCars);
+    } catch (err) {
+      console.error("Error fetching cars:", err);
+      setError("Failed to fetch cars");
+    }
+  };
 
   // Mock loading state
   const handleRefresh = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (activeTab === "myCars") {
+        await fetchCars();
+      } else {
+        // Simulate API call for carpools
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
     } catch (err) {
-      setError("Failed to refresh carpools");
+      setError("Failed to refresh data");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleCreateCarpool = () => {
-    router.push("/carpool/create");
-  };
+  useEffect(() => {
+    if (activeTab === "myCars") {
+      fetchCars();
+    }
+  }, [activeTab]);
 
   const handleCarpoolPress = (carpool) => {
-    router.push(`/carpool/${carpool.id}`);
+    router.push(`/carpools/${carpool.id}`);
+  };
+
+  const handleCarPress = (car) => {
+    // TODO: Implement car details view
+    console.log("Car pressed:", car);
   };
 
   const renderContent = () => {
@@ -113,66 +145,119 @@ export default function CarpoolScreen() {
       return <ErrorMessage message={error} onRetry={handleRefresh} />;
     }
 
-    return (
-      <CarpoolList
-        carpools={MOCK_CARPOOLS}
-        onCarpoolPress={handleCarpoolPress}
-      />
-    );
+    switch (activeTab) {
+      case "myCars":
+        return <CarList cars={cars} onCarPress={handleCarPress} />;
+      default:
+        return (
+          <CarpoolList
+            carpools={MOCK_CARPOOLS}
+            onCarpoolPress={handleCarpoolPress}
+          />
+        );
+    }
   };
 
   return (
-    <View style={styles.container}>
-      <Stack.Screen
-        options={{
-          title: "Carpools",
-          headerRight: () => (
-            <TouchableOpacity onPress={handleCreateCarpool}>
-              <Text style={styles.createButton}>Create</Text>
-            </TouchableOpacity>
-          ),
-        }}
-      />
-
-      <View style={styles.tabs}>
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <View
+        style={[styles.tabs, { borderBottomColor: theme.colors.greyLight }]}
+      >
         <TouchableOpacity
-          style={[styles.tab, activeTab === "available" && styles.activeTab]}
+          style={[
+            styles.tab,
+            activeTab === "available" && [
+              styles.activeTab,
+              { borderBottomColor: theme.colors.primary },
+            ],
+          ]}
           onPress={() => setActiveTab("available")}
         >
-          <Text
+          <ThemeText
+            color={
+              activeTab === "available"
+                ? theme.colors.primary
+                : theme.colors.grey
+            }
             style={[
               styles.tabText,
               activeTab === "available" && styles.activeTabText,
             ]}
           >
             Available
-          </Text>
+          </ThemeText>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === "my-carpools" && styles.activeTab]}
+          style={[
+            styles.tab,
+            activeTab === "my-carpools" && [
+              styles.activeTab,
+              { borderBottomColor: theme.colors.primary },
+            ],
+          ]}
           onPress={() => setActiveTab("my-carpools")}
         >
-          <Text
+          <ThemeText
+            color={
+              activeTab === "my-carpools"
+                ? theme.colors.primary
+                : theme.colors.grey
+            }
             style={[
               styles.tabText,
               activeTab === "my-carpools" && styles.activeTabText,
             ]}
           >
             My Carpools
-          </Text>
+          </ThemeText>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === "requests" && styles.activeTab]}
+          style={[
+            styles.tab,
+            activeTab === "requests" && [
+              styles.activeTab,
+              { borderBottomColor: theme.colors.primary },
+            ],
+          ]}
           onPress={() => setActiveTab("requests")}
         >
-          <Text
+          <ThemeText
+            color={
+              activeTab === "requests"
+                ? theme.colors.primary
+                : theme.colors.grey
+            }
             style={[
               styles.tabText,
               activeTab === "requests" && styles.activeTabText,
             ]}
           >
             Requests
-          </Text>
+          </ThemeText>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            activeTab === "myCars" && [
+              styles.activeTab,
+              { borderBottomColor: theme.colors.primary },
+            ],
+          ]}
+          onPress={() => setActiveTab("myCars")}
+        >
+          <ThemeText
+            color={
+              activeTab === "myCars" ? theme.colors.primary : theme.colors.grey
+            }
+            style={[
+              styles.tabText,
+              activeTab === "myCars" && styles.activeTabText,
+            ]}
+          >
+            My Cars
+          </ThemeText>
         </TouchableOpacity>
       </View>
 
@@ -191,17 +276,10 @@ export default function CarpoolScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
-  },
-  createButton: {
-    color: "#007AFF",
-    fontSize: 16,
-    fontWeight: "600",
   },
   tabs: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
   },
   tab: {
     flex: 1,
@@ -210,14 +288,11 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     borderBottomWidth: 2,
-    borderBottomColor: "#007AFF",
   },
   tabText: {
     fontSize: 14,
-    color: "#666",
   },
   activeTabText: {
-    color: "#007AFF",
     fontWeight: "600",
   },
 });

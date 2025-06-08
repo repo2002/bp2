@@ -18,6 +18,7 @@ export function useEventList() {
     endDate: null,
     isPrivate: null,
     type: null, // 'invitations', 'own', 'going'
+    limit: null, // For limiting results (e.g., last 3 invitations)
   });
   const { user } = useAuth();
   const PAGE_SIZE = 10;
@@ -79,8 +80,9 @@ export function useEventList() {
           }
         `
         )
-        .order("start_time", { ascending: true })
-        .limit(PAGE_SIZE);
+        .order("start_time", {
+          ascending: filters.type === "invitations" ? false : true,
+        });
 
       // Apply filters
       if (filters.status === "past") {
@@ -102,6 +104,11 @@ export function useEventList() {
           .eq("event_participants.status", "going");
       }
 
+      // For upcoming events, only show public events
+      if (filters.status === "upcoming" && !filters.type) {
+        query = query.eq("is_private", false);
+      }
+
       if (filters.category) {
         query = query.eq("category", filters.category);
       }
@@ -115,12 +122,19 @@ export function useEventList() {
         query = query.eq("is_private", filters.isPrivate);
       }
 
+      // Apply limit if specified
+      if (filters.limit) {
+        query = query.limit(filters.limit);
+      } else {
+        query = query.limit(PAGE_SIZE);
+      }
+
       const { data, error: err } = await query;
 
       if (err) throw err;
 
       setEvents(data);
-      setHasMore(data.length === PAGE_SIZE);
+      setHasMore(data.length === (filters.limit || PAGE_SIZE));
       await cacheData(data);
     } catch (err) {
       setError(err.message);
@@ -147,9 +161,11 @@ export function useEventList() {
           images:event_images(id, image_url, is_primary)
         `
         )
-        .order("start_time", { ascending: true })
+        .order("start_time", {
+          ascending: filters.type === "invitations" ? false : true,
+        })
         .gt("start_time", lastEvent.start_time)
-        .limit(PAGE_SIZE);
+        .limit(filters.limit || PAGE_SIZE);
 
       // Apply filters
       if (filters.status) {
@@ -173,7 +189,7 @@ export function useEventList() {
       if (err) throw err;
 
       setEvents((prev) => [...prev, ...data]);
-      setHasMore(data.length === PAGE_SIZE);
+      setHasMore(data.length === (filters.limit || PAGE_SIZE));
     } catch (err) {
       setError(err.message);
     } finally {

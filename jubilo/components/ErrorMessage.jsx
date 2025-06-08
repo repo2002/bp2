@@ -1,26 +1,31 @@
+import { useTheme } from "@/hooks/theme";
+import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, View } from "react-native";
 import ThemeText from "./theme/ThemeText";
 
 export default function ErrorMessage({ error, style }) {
+  const theme = useTheme();
   if (!error) return null;
   return (
     <View style={[styles.container, style]}>
-      <ThemeText style={styles.text}>{error}</ThemeText>
+      <Ionicons name="warning" color={theme.colors.error} size={20} />
+      <ThemeText color={theme.colors.error} style={styles.text}>
+        {error}
+      </ThemeText>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#ffeaea",
     borderRadius: 8,
-    padding: 12,
+    flexDirection: "row",
     marginVertical: 8,
     alignItems: "center",
     justifyContent: "center",
+    gap: 4,
   },
   text: {
-    color: "#d32f2f",
     fontSize: 15,
     textAlign: "center",
   },

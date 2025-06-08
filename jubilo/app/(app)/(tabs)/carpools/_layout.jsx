@@ -1,11 +1,10 @@
 import { useTheme } from "@/hooks/theme";
 import { Ionicons } from "@expo/vector-icons";
-import { Stack, useRouter } from "expo-router";
+import { router, Stack } from "expo-router";
 import { TouchableOpacity } from "react-native";
 
-export default function EventsLayout() {
+export default function CarpoolsLayout() {
   const theme = useTheme();
-  const router = useRouter();
 
   return (
     <Stack
@@ -14,19 +13,15 @@ export default function EventsLayout() {
           backgroundColor: theme.colors.background,
         },
         headerTintColor: theme.colors.text,
-        headerTitleStyle: {
-          fontWeight: "bold",
-        },
-        headerShadowVisible: false,
       }}
     >
       <Stack.Screen
         name="index"
         options={{
-          title: "Events",
+          title: "Carpools",
           headerRight: () => (
             <TouchableOpacity
-              onPress={() => router.push("/events/create")}
+              onPress={() => router.push("/carpools/create")}
               style={{
                 backgroundColor: theme.colors.primary,
                 borderRadius: 50,
@@ -40,13 +35,22 @@ export default function EventsLayout() {
               <Ionicons name="add" size={24} color={"white"} />
             </TouchableOpacity>
           ),
-        }}
-      />
-      <Stack.Screen
-        name="create"
-        options={{
-          title: "Create new event 🎉",
-          presentation: "modal",
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => router.push("/carpools/add-car")}
+              style={{
+                backgroundColor: theme.colors.primary,
+                borderRadius: 50,
+                widht: 35,
+                height: 35,
+                justifyContent: "center",
+                alignItems: "center",
+                padding: 5,
+              }}
+            >
+              <Ionicons name="car" size={24} color={"white"} />
+            </TouchableOpacity>
+          ),
         }}
       />
     </Stack>

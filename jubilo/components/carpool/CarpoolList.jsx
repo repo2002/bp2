@@ -1,12 +1,23 @@
+import ThemeText from "@/components/theme/ThemeText";
+import { useTheme } from "@/hooks/theme";
 import { MaterialIcons } from "@expo/vector-icons";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
 
-const EmptyState = () => (
-  <View style={styles.emptyState}>
-    <MaterialIcons name="directions-car" size={48} color="#ccc" />
-    <Text style={styles.emptyStateText}>No carpools available</Text>
-  </View>
-);
+const EmptyState = () => {
+  const theme = useTheme();
+  return (
+    <View style={styles.emptyState}>
+      <MaterialIcons
+        name="directions-car"
+        size={48}
+        color={theme.colors.grey}
+      />
+      <ThemeText color={theme.colors.grey} style={styles.emptyStateText}>
+        No carpools available
+      </ThemeText>
+    </View>
+  );
+};
 
 const formatDate = (dateString) => {
   if (!dateString) return "N/A";
@@ -15,29 +26,17 @@ const formatDate = (dateString) => {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return "Invalid Date";
 
-    const months = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-    const month = months[date.getMonth()];
-    const day = date.getDate();
+    const day = date.getDate().toString().padStart(2, "0");
+    const month = date
+      .toLocaleString("en-US", { month: "short" })
+      .toUpperCase();
     const hours = date.getHours();
     const minutes = date.getMinutes();
     const ampm = hours >= 12 ? "pm" : "am";
     const formattedHours = hours % 12 || 12;
     const formattedMinutes = minutes.toString().padStart(2, "0");
 
-    return `${month} ${day}, ${formattedHours}:${formattedMinutes} ${ampm}`;
+    return `${day} ${month}, ${formattedHours}:${formattedMinutes} ${ampm}`;
   } catch (error) {
     console.error("Error formatting date:", error);
     return "Invalid Date";
@@ -45,6 +44,8 @@ const formatDate = (dateString) => {
 };
 
 const CarpoolList = ({ carpools, onCarpoolPress }) => {
+  const theme = useTheme();
+
   if (!carpools?.length) {
     return <EmptyState />;
   }
@@ -54,7 +55,10 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
       {carpools.map((carpool) => (
         <TouchableOpacity
           key={carpool.id}
-          style={styles.carpoolCard}
+          style={[
+            styles.carpoolCard,
+            { backgroundColor: theme.colors.cardBackground },
+          ]}
           onPress={() => onCarpoolPress(carpool)}
         >
           <View style={styles.header}>
@@ -64,63 +68,109 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
                 style={styles.driverImage}
               />
               <View>
-                <Text style={styles.driverName}>
+                <ThemeText color={theme.colors.text} style={styles.driverName}>
                   {carpool.driver.first_name} {carpool.driver.last_name}
-                </Text>
-                <Text style={styles.carInfo}>
+                </ThemeText>
+                <ThemeText color={theme.colors.grey} style={styles.carInfo}>
                   {carpool.car.brand} {carpool.car.model} • {carpool.car.color}
-                </Text>
+                </ThemeText>
               </View>
             </View>
             <View style={styles.priceContainer}>
-              <Text style={styles.price}>${carpool.price}</Text>
-              <Text style={styles.seats}>{carpool.max_seats} seats</Text>
+              <ThemeText color={theme.colors.primary} style={styles.price}>
+                ${carpool.price}
+              </ThemeText>
+              <ThemeText color={theme.colors.grey} style={styles.seats}>
+                {carpool.max_seats} seats
+              </ThemeText>
             </View>
           </View>
 
           <View style={styles.route}>
             <View style={styles.routePoint}>
-              <MaterialIcons name="location-on" size={20} color="#007AFF" />
+              <MaterialIcons
+                name="location-on"
+                size={20}
+                color={theme.colors.primary}
+              />
               <View style={styles.routeDetails}>
-                <Text style={styles.location}>
+                <ThemeText color={theme.colors.text} style={styles.location}>
                   {carpool.departure_location}
-                </Text>
-                <Text style={styles.time}>
+                </ThemeText>
+                <ThemeText color={theme.colors.grey} style={styles.time}>
                   {formatDate(carpool.departure_time)}
-                </Text>
+                </ThemeText>
               </View>
             </View>
-            <View style={styles.routeLine} />
+            <View
+              style={[
+                styles.routeLine,
+                { backgroundColor: theme.colors.primary },
+              ]}
+            />
             <View style={styles.routePoint}>
-              <MaterialIcons name="location-on" size={20} color="#007AFF" />
+              <MaterialIcons
+                name="location-on"
+                size={20}
+                color={theme.colors.primary}
+              />
               <View style={styles.routeDetails}>
-                <Text style={styles.location}>
+                <ThemeText color={theme.colors.text} style={styles.location}>
                   {carpool.destination_location}
-                </Text>
-                <Text style={styles.time}>
+                </ThemeText>
+                <ThemeText color={theme.colors.grey} style={styles.time}>
                   {formatDate(carpool.destination_time)}
-                </Text>
+                </ThemeText>
               </View>
             </View>
           </View>
 
           {carpool.description && (
-            <Text style={styles.description} numberOfLines={2}>
+            <ThemeText
+              color={theme.colors.grey}
+              style={styles.description}
+              numberOfLines={2}
+            >
               {carpool.description}
-            </Text>
+            </ThemeText>
           )}
 
           <View style={styles.footer}>
             {carpool.is_recurring && (
-              <View style={styles.recurringBadge}>
-                <MaterialIcons name="repeat" size={14} color="#007AFF" />
-                <Text style={styles.recurringText}>Recurring</Text>
+              <View
+                style={[
+                  styles.recurringBadge,
+                  { backgroundColor: theme.colors.cardBackground },
+                ]}
+              >
+                <MaterialIcons
+                  name="repeat"
+                  size={14}
+                  color={theme.colors.primary}
+                />
+                <ThemeText
+                  color={theme.colors.primary}
+                  style={styles.recurringText}
+                >
+                  Recurring
+                </ThemeText>
               </View>
             )}
             {carpool.is_private && (
-              <View style={styles.privateBadge}>
-                <MaterialIcons name="lock" size={14} color="#666" />
-                <Text style={styles.privateText}>Private</Text>
+              <View
+                style={[
+                  styles.privateBadge,
+                  { backgroundColor: theme.colors.cardBackground },
+                ]}
+              >
+                <MaterialIcons
+                  name="lock"
+                  size={14}
+                  color={theme.colors.grey}
+                />
+                <ThemeText color={theme.colors.grey} style={styles.privateText}>
+                  Private
+                </ThemeText>
               </View>
             )}
           </View>
@@ -142,10 +192,8 @@ const styles = StyleSheet.create({
   emptyStateText: {
     marginTop: 8,
     fontSize: 16,
-    color: "#666",
   },
   carpoolCard: {
-    backgroundColor: "#fff",
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -174,11 +222,9 @@ const styles = StyleSheet.create({
   driverName: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#000",
   },
   carInfo: {
     fontSize: 14,
-    color: "#666",
     marginTop: 2,
   },
   priceContainer: {
@@ -187,11 +233,9 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#007AFF",
   },
   seats: {
     fontSize: 14,
-    color: "#666",
     marginTop: 2,
   },
   route: {
@@ -208,23 +252,19 @@ const styles = StyleSheet.create({
   },
   location: {
     fontSize: 14,
-    color: "#000",
   },
   time: {
     fontSize: 12,
-    color: "#666",
     marginTop: 2,
   },
   routeLine: {
     width: 2,
     height: 24,
-    backgroundColor: "#007AFF",
     marginLeft: 9,
     marginBottom: 8,
   },
   description: {
     fontSize: 14,
-    color: "#666",
     marginBottom: 12,
   },
   footer: {
@@ -234,7 +274,6 @@ const styles = StyleSheet.create({
   recurringBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#E3F2FD",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -242,20 +281,17 @@ const styles = StyleSheet.create({
   },
   recurringText: {
     fontSize: 12,
-    color: "#007AFF",
     marginLeft: 4,
   },
   privateBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F5F5F5",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
   privateText: {
     fontSize: 12,
-    color: "#666",
     marginLeft: 4,
   },
 });

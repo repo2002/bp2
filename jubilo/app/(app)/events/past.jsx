@@ -8,19 +8,20 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-export default function EventInvitationsScreen() {
+export default function PastEventsScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
-  const { events, loading, error, refresh, setFilters } = useEventList();
+  const { events, loading, error, refresh, updateFilters } = useEventList();
 
   useEffect(() => {
-    setFilters((prev) => ({
-      ...prev,
-      type: "invitations",
-    }));
+    updateFilters({
+      status: "past",
+    });
   }, []);
 
   const handleEventPress = (event) => {
@@ -57,11 +58,17 @@ export default function EventInvitationsScreen() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <ScrollView
+      style={{
+        flex: 1,
+        backgroundColor: theme.colors.background,
+        paddingTop: insets.top,
+      }}
+    >
       <Section
-        icon={<Ionicons name="mail" size={22} color="#FF6B6B" />}
-        title="Event Invitations"
-        description="Events you've been invited to"
+        icon={<Ionicons name="time" size={22} color="#888" />}
+        title="Past Events"
+        description="Events that have already happened"
       >
         {events.map((event) => (
           <EventCardMedium
