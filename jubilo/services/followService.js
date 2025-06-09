@@ -268,12 +268,20 @@ export const getPendingFollowRequests = async () => {
     } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
-    const { data, error } = await supabase
+    // Get requests where we are being followed
+    const { data: incomingRequests, error: incomingError } = await supabase
       .from("followers")
       .select(
         `
         id,
         follower:profiles!followers_follower_id_fkey (
+          id,
+          username,
+          first_name,
+          last_name,
+          image_url
+        ),
+        followed:profiles!followers_following_id_fkey (
           id,
           username,
           first_name,
@@ -286,8 +294,42 @@ export const getPendingFollowRequests = async () => {
       .eq("following_id", user.id)
       .eq("status", "pending");
 
-    if (error) throw error;
-    return { data, error: null };
+    if (incomingError) throw incomingError;
+
+    // Get requests where we are following others
+    const { data: outgoingRequests, error: outgoingError } = await supabase
+      .from("followers")
+      .select(
+        `
+        id,
+        follower:profiles!followers_follower_id_fkey (
+          id,
+          username,
+          first_name,
+          last_name,
+          image_url
+        ),
+        followed:profiles!followers_following_id_fkey (
+          id,
+          username,
+          first_name,
+          last_name,
+          image_url
+        ),
+        created_at
+      `
+      )
+      .eq("follower_id", user.id)
+      .eq("status", "pending");
+
+    if (outgoingError) throw outgoingError;
+
+    // Combine both types of requests
+    const allRequests = [
+      ...(incomingRequests || []),
+      ...(outgoingRequests || []),
+    ];
+    return { data: allRequests, error: null };
   } catch (error) {
     console.error("Error getting pending follow requests:", error);
     return { data: null, error };

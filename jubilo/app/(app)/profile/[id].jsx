@@ -1,14 +1,14 @@
 import AcceptButton from "@/components/AcceptButton";
 import FollowButton from "@/components/FollowButton";
 import ProfileTabs from "@/components/ProfileTabs";
+import RequestButton from "@/components/RequestButton";
 import ThemeText from "@/components/theme/ThemeText";
 import UserHeader from "@/components/UserHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/theme";
 import {
-  followUser,
+  getFollowStatus,
   getPendingFollowRequests,
-  unfollowUser,
 } from "@/services/followService";
 import { getUserData } from "@/services/userService";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,7 +23,7 @@ export default function OtherUserProfile() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [pendingRequest, setPendingRequest] = useState(null);
-  const [isRequestee, setIsRequestee] = useState(false);
+  const [followStatus, setFollowStatus] = useState("none");
   const [canMessage, setCanMessage] = useState(false);
   const insets = useSafeAreaInsets();
   const theme = useTheme();
@@ -34,72 +34,80 @@ export default function OtherUserProfile() {
       getUserData(id).then((res) => {
         if (res.success) {
           setUser(res.data);
-          // Check if both users are following each other
-          if (
-            res.data.followers?.some((f) => f.id === authUser?.id) &&
-            res.data.following?.some((f) => f.id === authUser?.id)
-          ) {
-            setCanMessage(true);
-          } else {
-            setCanMessage(false);
-          }
         }
         setLoading(false);
       });
     }
-  }, [id, authUser]);
+  }, [id]);
 
   useEffect(() => {
     if (user) {
       // Check for pending follow requests
       getPendingFollowRequests().then((res) => {
+        console.log("Pending requests:", res.data);
         if (res.data && res.data.length > 0) {
           // Find if there's a request between these users
-          const request = res.data.find(
-            (r) =>
-              // We are the requestee if we are the one being followed
-              (r.follower.id === authUser?.id && r.followed.id === user.id) ||
-              // We are the requester if we are the one following
-              (r.follower.id === user.id && r.followed.id === authUser?.id)
-          );
+          const request = res.data.find((r) => {
+            console.log("Checking request:", {
+              followerId: r.follower.id,
+              followedId: r.followed.id,
+              userId: user.id,
+              authUserId: authUser?.id,
+            });
+            // We are the requestee if the current user is being followed by the profile we're viewing
+            return r.follower.id === user.id && r.followed.id === authUser?.id;
+          });
 
           if (request) {
+            console.log("Found incoming request:", request);
             setPendingRequest(request);
-            // If we are the one being followed (requestee), set isRequestee to true
-            setIsRequestee(request.follower.id === authUser?.id);
           } else {
             setPendingRequest(null);
-            setIsRequestee(false);
           }
         } else {
           setPendingRequest(null);
-          setIsRequestee(false);
+        }
+      });
+
+      // Get follow status
+      getFollowStatus(user.id).then(({ data }) => {
+        if (data) {
+          setFollowStatus(data.status);
+          console.log("Follow status updated:", {
+            status: data.status,
+            userId: user.id,
+            authUserId: authUser?.id,
+          });
+
+          // Check if both users are following each other
+          if (data.status === "following") {
+            // If we're following them, check if they're following us
+            getUserData(authUser?.id).then((res) => {
+              if (res.success) {
+                const isFollowingBack = res.data.followers?.some(
+                  (f) => f.follower.id === user.id
+                );
+                setCanMessage(isFollowingBack);
+                console.log("Checking mutual follow:", {
+                  weFollowThem: data.status === "following",
+                  theyFollowUs: isFollowingBack,
+                  canMessage: isFollowingBack,
+                  ourFollowers: res.data.followers?.map((f) => ({
+                    id: f.follower.id,
+                    username: f.follower.username,
+                  })),
+                  profileUserId: user.id,
+                });
+              }
+            });
+          } else {
+            setCanMessage(false);
+            console.log("Not following, canMessage set to false");
+          }
         }
       });
     }
   }, [user, authUser]);
-
-  const handleFollow = async (userId) => {
-    try {
-      const { error } = await followUser(userId);
-      if (error) throw error;
-    } catch (err) {
-      console.error("Error following user:", err);
-    }
-  };
-
-  const handleUnfollow = async (userId) => {
-    try {
-      const { error } = await unfollowUser(userId);
-      if (error) throw error;
-    } catch (err) {
-      console.error("Error unfollowing user:", err);
-    }
-  };
-
-  const handleAccept = () => {
-    setPendingRequest(null);
-  };
 
   const handleMessage = () => {
     // TODO: Implement message logic (navigate to chat, etc.)
@@ -108,6 +116,21 @@ export default function OtherUserProfile() {
   if (loading || !user) return <ThemeText>Loading...</ThemeText>;
 
   const isMe = authUser?.id === user.id;
+  const isPrivate = user.is_private;
+  const hasPendingRequest = followStatus === "requested";
+  const hasIncomingRequest = pendingRequest?.follower.id === user.id;
+
+  console.log("Profile state:", {
+    isMe,
+    isPrivate,
+    hasPendingRequest,
+    hasIncomingRequest,
+    pendingRequest,
+    followStatus,
+    canMessage,
+    userId: user?.id,
+    authUserId: authUser?.id,
+  });
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }}>
@@ -138,20 +161,32 @@ export default function OtherUserProfile() {
       </View>
       {!isMe && (
         <View style={styles.actionsRow}>
-          {pendingRequest && isRequestee ? (
-            // If we are the requestee (being followed), show Accept button
+          {hasIncomingRequest ? (
+            // Show Accept button if there's an incoming request
             <AcceptButton
               requestId={pendingRequest.id}
-              onAccept={handleAccept}
+              onAccept={() => setPendingRequest(null)}
+              style={{ flex: 1 }}
+            />
+          ) : followStatus === "following" ? (
+            // Show Follow button if already following
+            <FollowButton
+              userId={user.id}
+              isFollowing={true}
+              style={{ flex: 1 }}
+            />
+          ) : isPrivate ? (
+            // For private users without incoming requests and not following
+            <RequestButton
+              userId={user.id}
+              hasPendingRequest={hasPendingRequest}
               style={{ flex: 1 }}
             />
           ) : (
-            // If we are the requester or there's no request, show Follow button
+            // For non-private users without incoming requests and not following
             <FollowButton
               userId={user.id}
-              isPrivate={user.is_private}
-              onFollow={handleFollow}
-              onUnfollow={handleUnfollow}
+              isFollowing={false}
               style={{ flex: 1 }}
             />
           )}
@@ -159,18 +194,19 @@ export default function OtherUserProfile() {
             <TouchableOpacity
               style={[
                 styles.button,
-                { borderWidth: 1, borderColor: theme.colors.text },
+                {
+                  borderWidth: 1,
+                  borderColor: theme.colors.warning,
+                },
               ]}
               onPress={handleMessage}
             >
               <Ionicons
                 name="chatbubble-ellipses-outline"
-                size={18}
-                color={theme.colors.text}
+                size={16}
+                color={theme.colors.warning}
               />
-              <ThemeText
-                style={[styles.buttonText, { color: theme.colors.text }]}
-              >
+              <ThemeText color={theme.colors.warning} style={styles.buttonText}>
                 Message
               </ThemeText>
             </TouchableOpacity>
@@ -203,6 +239,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     marginTop: 16,
+    alignItems: "center",
   },
   button: {
     flexDirection: "row",

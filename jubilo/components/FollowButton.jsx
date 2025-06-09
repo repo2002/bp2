@@ -1,9 +1,7 @@
 import { useTheme } from "@/hooks/theme";
 import useFollowersSubscription from "@/hooks/useFollowersSubscription";
 import useFollowersSubscriptionAsFollower from "@/hooks/useFollowersSubscriptionAsFollower";
-import { followEvent, unfollowEvent } from "@/services/events";
 import {
-  cancelFollowRequest,
   followUser,
   getFollowStatus,
   unfollowUser,
@@ -16,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import ThemeText from "./theme/ThemeText";
 
 const FollowButton = ({
   userId,
@@ -97,115 +96,53 @@ const FollowButton = ({
     }
   });
 
-  const handleFollow = async () => {
+  const handlePress = async () => {
+    if (loading) return;
+    setLoading(true);
+
     try {
-      setLoading(true);
-      setError(null);
-      if (isEvent) {
-        await followEvent(eventId);
+      if (status === "following") {
+        await unfollowUser(userId);
+        setStatus("none");
+        onUnfollow?.();
+      } else {
+        await followUser(userId);
         setStatus("following");
-        if (onFollow) onFollow(eventId);
-      } else {
-        const { data, error } = await followUser(userId);
-        if (error) throw error;
-        setStatus(data.status === "accepted" ? "following" : "requested");
-        if (onFollow) onFollow(userId);
+        onFollow?.();
       }
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUnfollow = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      if (isEvent) {
-        await unfollowEvent(eventId);
-        setStatus("none");
-        if (onUnfollow) onUnfollow(eventId);
-      } else {
-        const { error } = await unfollowUser(userId);
-        if (error) throw error;
-        setStatus("none");
-        if (onUnfollow) onUnfollow(userId);
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCancelRequest = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const { error } = await cancelFollowRequest(userId);
-      if (error) throw error;
-      setStatus("none");
-      if (onUnfollow) onUnfollow(userId);
-    } catch (err) {
-      setError(err.message);
+      console.error("Error handling follow:", err);
     } finally {
       setLoading(false);
     }
   };
 
   const getButtonStyle = () => {
-    switch (status) {
-      case "following":
-        return {
-          borderWidth: 1,
-          borderColor: theme.colors.error,
-        };
-      case "requested":
-        return {
-          backgroundColor: theme.colors.grey,
-        };
-      default:
-        return {
-          backgroundColor: theme.colors.primary,
-        };
+    if (status === "following") {
+      return {
+        backgroundColor: theme.colors.background,
+        borderWidth: 1,
+        borderColor: theme.colors.text,
+      };
     }
+    return {
+      backgroundColor: theme.colors.primary,
+    };
   };
 
   const getButtonText = () => {
     if (loading) return "";
-    switch (status) {
-      case "following":
-        return "Unfollow";
-      case "requested":
-        return "Cancel";
-      default:
-        return isPrivate ? "Request" : "Follow";
+    if (status === "following") {
+      return "Following";
     }
+    return "Follow";
   };
 
   const getTextColor = () => {
-    switch (status) {
-      case "following":
-        return theme.colors.error;
-      case "requested":
-        return "black";
-      default:
-        return "white";
+    if (status === "following") {
+      return theme.colors.text;
     }
-  };
-
-  const handlePress = () => {
-    switch (status) {
-      case "following":
-        handleUnfollow();
-        break;
-      case "requested":
-        handleCancelRequest();
-        break;
-      default:
-        handleFollow();
-    }
+    return theme.colors.background;
   };
 
   if (loading && status === "none") {
@@ -226,14 +163,11 @@ const FollowButton = ({
         disabled={loading}
       >
         {loading ? (
-          <ActivityIndicator
-            size="small"
-            color={status === "following" ? theme.colors.text : "white"}
-          />
+          <ActivityIndicator size="small" color={getTextColor()} />
         ) : (
-          <Text style={[styles.text, { color: getTextColor() }]}>
+          <ThemeText style={[styles.buttonText, { color: getTextColor() }]}>
             {getButtonText()}
-          </Text>
+          </ThemeText>
         )}
       </TouchableOpacity>
       {error && (
@@ -260,7 +194,7 @@ const styles = StyleSheet.create({
     minWidth: 80,
     alignItems: "center",
   },
-  text: {
+  buttonText: {
     fontSize: 14,
     fontWeight: "600",
   },

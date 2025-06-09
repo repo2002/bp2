@@ -32,7 +32,10 @@ const AcceptButton = ({ requestId, onAccept, style }) => {
   return (
     <View style={[styles.container, style]}>
       <TouchableOpacity
-        style={[styles.button, { backgroundColor: theme.colors.success }]}
+        style={[
+          styles.button,
+          { borderColor: theme.colors.success, borderWidth: 1 },
+        ]}
         onPress={handleAccept}
         disabled={loading}
       >
@@ -40,8 +43,14 @@ const AcceptButton = ({ requestId, onAccept, style }) => {
           <ActivityIndicator size="small" color="white" />
         ) : (
           <>
-            <Ionicons name="checkmark-outline" size={18} color="white" />
-            <Text style={[styles.text, { color: "white" }]}>Accept</Text>
+            <Ionicons
+              name="checkmark-outline"
+              size={18}
+              color={theme.colors.success}
+            />
+            <Text style={[styles.text, { color: theme.colors.success }]}>
+              Accept
+            </Text>
           </>
         )}
       </TouchableOpacity>

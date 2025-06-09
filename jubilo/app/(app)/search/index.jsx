@@ -1,5 +1,4 @@
 import EmptyState from "@/components/EmptyState";
-import FollowButton from "@/components/FollowButton";
 import LoadingIndicator from "@/components/LoadingIndicator";
 import ThemeText from "@/components/theme/ThemeText";
 import UserChip from "@/components/UserChip";
@@ -153,9 +152,6 @@ export default function SearchPage() {
                   </View>
                 }
               />
-              <View style={{ width: "30%" }}>
-                <FollowButton userId={item.id} />
-              </View>
             </View>
           )}
           ListEmptyComponent={
