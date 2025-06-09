@@ -6,13 +6,14 @@ import ThemeText from "@/components/theme/ThemeText";
 import UserHeader from "@/components/UserHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/theme";
+import { createDirectChat } from "@/services/chatService";
 import {
   getFollowStatus,
   getPendingFollowRequests,
 } from "@/services/followService";
 import { getUserData } from "@/services/userService";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,6 +28,7 @@ export default function OtherUserProfile() {
   const [canMessage, setCanMessage] = useState(false);
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const router = useRouter();
 
   useEffect(() => {
     if (id) {
@@ -109,8 +111,25 @@ export default function OtherUserProfile() {
     }
   }, [user, authUser]);
 
-  const handleMessage = () => {
-    // TODO: Implement message logic (navigate to chat, etc.)
+  const handleMessage = async () => {
+    try {
+      if (!user || !authUser) return;
+
+      const { success, data, error } = await createDirectChat(
+        authUser.id,
+        user.id
+      );
+
+      if (!success) {
+        console.error("Error creating/getting chat:", error);
+        return;
+      }
+
+      // Navigate to the chat screen with the room ID
+      router.push(`/chats/${data.id}`);
+    } catch (error) {
+      console.error("Error in handleMessage:", error);
+    }
   };
 
   if (loading || !user) return <ThemeText>Loading...</ThemeText>;
