@@ -185,17 +185,19 @@ export const CustomComposer = (props) => {
       {...props}
       textInputStyle={{
         color: theme.colors.text,
-        fontSize: 16,
+        padding: 12,
       }}
-      placeholderTextColor={theme.colors.grey}
       textInputProps={{
+        placeholderTextColor: "black",
         multiline: true,
         maxLength: 1000,
-        placeholderTextColor: theme.colors.grey,
         autoFocus: false,
         style: {
           flex: 1,
           padding: 8,
+          marginHorizontal: 8,
+          backgroundColor: theme.colors.greyLight,
+          borderRadius: 100,
         },
       }}
     />
@@ -352,7 +354,7 @@ const MessageTimestamp = ({ currentMessage, isCurrentUser, theme, style }) => (
     style={{
       fontSize: 10,
       color: isCurrentUser ? "#FFFFFF" : theme.colors.text,
-      marginTop: 2,
+
       marginLeft: 32,
       alignSelf: "flex-end",
       padding: 4,

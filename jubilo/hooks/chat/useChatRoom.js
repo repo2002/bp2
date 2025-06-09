@@ -1,6 +1,6 @@
 import defaultAvatar from "@/assets/images/default-avatar.png";
 import { getData, getUser, storeData, storeUser } from "@/lib/storage";
-import { getChatById } from "@/services/chatService";
+import { getChatById, getChatMessages } from "@/services/chatService";
 import { getUserData } from "@/services/userService";
 import { useCallback, useEffect, useState } from "react";
 import useMessagesSubscription from "./useMessagesSubscription";
@@ -12,6 +12,8 @@ export default function useChatRoom(roomId, userId) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hasCached, setHasCached] = useState(false);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   // Helper to transform a message to GiftedChat format, using cached user info
   const transformMessage = useCallback(async (msg) => {
@@ -131,5 +133,43 @@ export default function useChatRoom(roomId, userId) {
     // Optionally handle UPDATE and DELETE events here
   });
 
-  return { room, messages, unread, isLoading: !hasCached && isLoading, error };
+  // Load older messages
+  const loadOlderMessages = async () => {
+    if (loadingEarlier || !hasMore || messages.length === 0) return;
+    setLoadingEarlier(true);
+    try {
+      const oldest = messages[messages.length - 1];
+      const before = oldest?.createdAt?.toISOString?.() || oldest?.created_at;
+      const { success, data } = await getChatMessages(roomId, {
+        before,
+        limit: 30,
+      });
+      if (success && data && data.length > 0) {
+        const transformed = await Promise.all(
+          data.map((msg) => transformMessage(msg))
+        );
+        // Sort newest first
+        transformed.sort((a, b) => b.createdAt - a.createdAt);
+        setMessages((prev) => [...prev, ...transformed]);
+        if (data.length < 30) setHasMore(false);
+      } else {
+        setHasMore(false);
+      }
+    } catch (err) {
+      // Optionally handle error
+    } finally {
+      setLoadingEarlier(false);
+    }
+  };
+
+  return {
+    room,
+    messages,
+    unread,
+    isLoading: !hasCached && isLoading,
+    error,
+    loadOlderMessages,
+    hasMore,
+    loadingEarlier,
+  };
 }

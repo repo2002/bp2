@@ -40,7 +40,15 @@ export default function ChatScreen() {
   const roomId = params?.id;
 
   // Use the chat room hook
-  const { room, messages, unread, isLoading } = useChatRoom(roomId, user.id);
+  const {
+    room,
+    messages,
+    unread,
+    isLoading,
+    loadOlderMessages,
+    hasMore,
+    loadingEarlier,
+  } = useChatRoom(roomId, user.id);
 
   // Use the typing status hook
   const { handleTyping } = useTypingStatus(roomId, user.id);
@@ -186,12 +194,9 @@ export default function ChatScreen() {
         )}
         scrollToBottom
         renderUsernameOnMessage={room.is_group}
-        listViewProps={{
-          onEndReached: () => {
-            // TODO: Load earlier messages
-          },
-          onEndReachedThreshold: 0.5,
-        }}
+        loadEarlier={hasMore}
+        onLoadEarlier={loadOlderMessages}
+        isLoadingEarlier={loadingEarlier}
       />
       <AttachmentHandler
         ref={attachmentHandlerRef}
