@@ -2,7 +2,12 @@ import ThemeText from "@/components/theme/ThemeText";
 import { useTheme } from "@/hooks/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { format } from "date-fns";
-import { ActivityIndicator, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  ScrollView,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 const Section = ({ title, children, icon }) => {
   const theme = useTheme();
@@ -110,7 +115,7 @@ export default function SummaryStep({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }}>
       {/* Header */}
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
         <ThemeText style={{ fontSize: 18, fontWeight: "600", padding: 16 }}>
@@ -295,7 +300,7 @@ export default function SummaryStep({
               />
             }
             label="Price per Seat"
-            value={form.price ? `$${form.price}` : "-"}
+            value={form.price ? `€${form.price}` : "-"}
           />
           <InfoRow
             icon={
@@ -306,7 +311,7 @@ export default function SummaryStep({
               />
             }
             label="Total Cost"
-            value={form.cost ? `$${form.cost}` : "-"}
+            value={form.cost ? `€${form.cost}` : "-"}
           />
           {form.description && (
             <InfoRow
@@ -357,9 +362,8 @@ export default function SummaryStep({
         {/* Error */}
         {error && (
           <ThemeText
+            color={theme.colors.error}
             style={{
-              color: theme.colors.error,
-              marginVertical: 8,
               textAlign: "center",
             }}
           >
@@ -416,6 +420,6 @@ export default function SummaryStep({
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   );
 }

@@ -300,10 +300,13 @@ export const createGroupChat = async (userId, name, participantIds) => {
 
     if (roomError) throw roomError;
 
-    // Add participants
+    // Deduplicate participantIds and exclude userId
+    const uniqueParticipantIds = [...new Set(participantIds)].filter(
+      (id) => id !== userId
+    );
     const participants = [
       { room_id: room.id, user_id: userId, role: "admin" },
-      ...participantIds.map((id) => ({
+      ...uniqueParticipantIds.map((id) => ({
         room_id: room.id,
         user_id: id,
         role: "member",

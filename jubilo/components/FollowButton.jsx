@@ -59,15 +59,42 @@ const FollowButton = ({
 
   useEffect(() => {
     loadFollowStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, eventId, isFollowingProp, type]);
 
   // Subscribe to changes as follower (user only)
   useFollowersSubscriptionAsFollower(userId, async (payload) => {
-    if (!isEvent) await loadFollowStatus();
+    if (!isEvent) {
+      // Handle changes when we are the follower
+      if (payload.eventType === "INSERT") {
+        setStatus(
+          payload.new.status === "accepted" ? "following" : "requested"
+        );
+      } else if (payload.eventType === "DELETE") {
+        setStatus("none");
+      } else if (payload.eventType === "UPDATE") {
+        setStatus(
+          payload.new.status === "accepted" ? "following" : "requested"
+        );
+      }
+    }
   });
+
+  // Subscribe to changes as following (user only)
   useFollowersSubscription(userId, async (payload) => {
-    if (!isEvent) await loadFollowStatus();
+    if (!isEvent) {
+      // Handle changes when we are being followed
+      if (payload.eventType === "INSERT") {
+        if (payload.new.status === "pending") {
+          setStatus("none");
+        }
+      } else if (payload.eventType === "DELETE") {
+        setStatus("none");
+      } else if (payload.eventType === "UPDATE") {
+        if (payload.new.status === "accepted") {
+          setStatus("following");
+        }
+      }
+    }
   });
 
   const handleFollow = async () => {
@@ -79,9 +106,9 @@ const FollowButton = ({
         setStatus("following");
         if (onFollow) onFollow(eventId);
       } else {
-        const { error } = await followUser(userId);
+        const { data, error } = await followUser(userId);
         if (error) throw error;
-        setStatus(isPrivate ? "requested" : "following");
+        setStatus(data.status === "accepted" ? "following" : "requested");
         if (onFollow) onFollow(userId);
       }
     } catch (err) {
@@ -205,15 +232,13 @@ const FollowButton = ({
           />
         ) : (
           <Text style={[styles.text, { color: getTextColor() }]}>
-            {" "}
-            {getButtonText()}{" "}
+            {getButtonText()}
           </Text>
         )}
       </TouchableOpacity>
       {error && (
         <Text style={[styles.error, { color: theme.colors.error }]}>
-          {" "}
-          {error}{" "}
+          {error}
         </Text>
       )}
     </View>
@@ -223,15 +248,17 @@ const FollowButton = ({
 export default FollowButton;
 
 const styles = StyleSheet.create({
-  container: {},
-  button: {
+  container: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+  },
+  button: {
     flex: 1,
-    borderRadius: 10,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    gap: 8,
+    borderRadius: 10,
+    minWidth: 80,
+    alignItems: "center",
   },
   text: {
     fontSize: 14,
@@ -239,6 +266,6 @@ const styles = StyleSheet.create({
   },
   error: {
     fontSize: 12,
-    marginTop: 4,
+    marginLeft: 8,
   },
 });

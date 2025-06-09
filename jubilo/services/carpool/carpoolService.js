@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { addParticipant, removeParticipant } from "@/services/chatService";
 
 export const carpoolService = {
   async getCarpools(filters = {}) {
@@ -85,34 +86,30 @@ export const carpoolService = {
   },
 
   async createCarpool(carpoolData) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) throw new Error("User not authenticated");
-
-    const carpool = {
-      ...carpoolData,
-      driver_id: user.id,
-      status: "scheduled",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
+    console.log("[createCarpool] Starting carpool creation", carpoolData);
+    // Remove chat_room_id if present
+    const { chat_room_id, ...carpoolDataWithoutChatRoom } = carpoolData;
+    // Create the carpool without chat_room_id
     const { data, error } = await supabase
       .from("carpools")
-      .insert([carpool])
+      .insert(carpoolDataWithoutChatRoom)
       .select()
       .single();
-
-    if (error) throw error;
+    if (error) {
+      console.error("[createCarpool] Error inserting carpool:", error);
+      throw error;
+    }
+    console.log("[createCarpool] Carpool inserted:", data);
     return data;
   },
 
   async updateCarpool(id, updates) {
+    // Remove chat_room_id if present
+    const { chat_room_id, ...updatesWithoutChatRoom } = updates;
     const { data, error } = await supabase
       .from("carpools")
       .update({
-        ...updates,
+        ...updatesWithoutChatRoom,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
@@ -148,6 +145,19 @@ export const carpoolService = {
       .single();
 
     if (error) throw error;
+    // Add participant to chat
+    const { data: carpool } = await supabase
+      .from("carpools")
+      .select("chat_room_id, driver_id")
+      .eq("id", carpoolId)
+      .single();
+    if (carpool?.chat_room_id && carpool?.driver_id && data?.user_id) {
+      await addParticipant(
+        carpool.chat_room_id,
+        carpool.driver_id,
+        data.user_id
+      );
+    }
     return data;
   },
 
@@ -156,14 +166,44 @@ export const carpoolService = {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) throw new Error("User not authenticated");
+    console.log("[leaveCarpool] User:", user.id, "Carpool:", carpoolId);
 
-    const { error } = await supabase
+    // Remove the user from carpool_passengers
+    const { data: deleteResult, error: deleteError } = await supabase
       .from("carpool_passengers")
       .delete()
       .eq("carpool_id", carpoolId)
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .select();
+    if (deleteError) {
+      console.error("[leaveCarpool] Error deleting passenger:", deleteError);
+      throw deleteError;
+    }
+    console.log("[leaveCarpool] Deleted passenger:", deleteResult);
 
-    if (error) throw error;
+    // Remove participant from chat if chat_room_id exists
+    const { data: carpool, error: carpoolError } = await supabase
+      .from("carpools")
+      .select("chat_room_id")
+      .eq("id", carpoolId)
+      .single();
+    if (carpoolError) {
+      console.error(
+        "[leaveCarpool] Error fetching carpool for chat_room_id:",
+        carpoolError
+      );
+    } else {
+      console.log("[leaveCarpool] Carpool fetched:", carpool);
+    }
+    if (carpool?.chat_room_id) {
+      console.log(
+        "[leaveCarpool] Removing user from chat:",
+        carpool.chat_room_id,
+        user.id
+      );
+      await removeParticipant(carpool.chat_room_id, user.id);
+    }
+    return deleteResult;
   },
 
   async updatePassengerStatus(carpoolId, userId, status) {

@@ -32,6 +32,7 @@ export default function AppLayout() {
         <Stack.Screen name="carpools/[id]" />
         <Stack.Screen name="carpools/create" />
         <Stack.Screen name="carpools/add-car" />
+        {/* <Stack.Screen name="carpools/edit" /> */}
         {/* <Stack.Screen name="cars/[id]/index" /> */}
         <Stack.Screen name="cars/[id]/edit" />
       </Stack>

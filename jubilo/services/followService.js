@@ -261,7 +261,7 @@ export const getFollowing = async (userId, page = 1, limit = 20) => {
   }
 };
 
-export const getPendingFollowRequests = async (page = 1, limit = 20) => {
+export const getPendingFollowRequests = async () => {
   try {
     const {
       data: { user },
@@ -272,24 +272,24 @@ export const getPendingFollowRequests = async (page = 1, limit = 20) => {
       .from("followers")
       .select(
         `
-        follower:followers (
+        id,
+        follower:profiles!followers_follower_id_fkey (
           id,
           username,
-          full_name,
-          avatar_url
+          first_name,
+          last_name,
+          image_url
         ),
         created_at
       `
       )
-      .match({
-        following_id: user.id,
-        status: "pending",
-      })
-      .range((page - 1) * limit, page * limit - 1);
+      .eq("following_id", user.id)
+      .eq("status", "pending");
 
     if (error) throw error;
     return { data, error: null };
   } catch (error) {
+    console.error("Error getting pending follow requests:", error);
     return { data: null, error };
   }
 };

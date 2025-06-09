@@ -90,8 +90,12 @@ const CreateCarpoolScreen = () => {
     setSubmitting(true);
     setError(null);
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       await carpoolService.createCarpool({
         car_id: selectedCar.id,
+        driver_id: user.id,
         departure_location: form.departure_location,
         departure_time: form.departure_time,
         destination_location: form.destination_location,
@@ -197,7 +201,6 @@ const CreateCarpoolScreen = () => {
           error={error}
         />
       )}
-      {/* Step navigation buttons (Back/Next) can be added here for all steps */}
     </View>
   );
 };

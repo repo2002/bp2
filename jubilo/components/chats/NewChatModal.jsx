@@ -28,6 +28,7 @@ export default function NewChatModal({ visible, onClose, onCreate }) {
   const [groupName, setGroupName] = useState("");
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState([]);
+  const [selectedUsers, setSelectedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
@@ -62,6 +63,16 @@ export default function NewChatModal({ visible, onClose, onCreate }) {
     fetchUsers();
   }, [authUserId]);
 
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!visible) {
+      setIsGroup(false);
+      setGroupName("");
+      setSearch("");
+      setSelectedUsers([]);
+    }
+  }, [visible]);
+
   // Filter users based on search
   const filteredUsers = users.filter(
     (u) =>
@@ -93,14 +104,14 @@ export default function NewChatModal({ visible, onClose, onCreate }) {
   };
 
   const handleCreateGroup = async () => {
-    if (!authUserId || !groupName) return;
+    if (!authUserId || !groupName || selectedUsers.length === 0) return;
 
     try {
       setCreating(true);
       const { success, data, error } = await createGroupChat(
         authUserId,
         groupName,
-        filteredUsers.map((u) => u.id)
+        selectedUsers.map((u) => u.id)
       );
 
       if (success) {
@@ -114,6 +125,21 @@ export default function NewChatModal({ visible, onClose, onCreate }) {
     } finally {
       setCreating(false);
     }
+  };
+
+  const toggleUserSelection = (user) => {
+    setSelectedUsers((prev) => {
+      const isSelected = prev.some((u) => u.id === user.id);
+      if (isSelected) {
+        return prev.filter((u) => u.id !== user.id);
+      } else {
+        return [...prev, user];
+      }
+    });
+  };
+
+  const isUserSelected = (userId) => {
+    return selectedUsers.some((u) => u.id === userId);
   };
 
   return (
@@ -205,6 +231,38 @@ export default function NewChatModal({ visible, onClose, onCreate }) {
             ]}
             placeholderTextColor={theme.colors.grey}
           />
+          {isGroup && selectedUsers.length > 0 && (
+            <View style={styles.selectedUsersContainer}>
+              <FlatList
+                horizontal
+                data={selectedUsers}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <View style={styles.selectedUserChip}>
+                    <Avatar size={30} uri={item.image_url} />
+                    <ThemeText
+                      style={styles.selectedUserName}
+                      numberOfLines={1}
+                    >
+                      {item.username}
+                    </ThemeText>
+                    <TouchableOpacity
+                      onPress={() => toggleUserSelection(item)}
+                      style={styles.removeUserButton}
+                    >
+                      <Ionicons
+                        name="close-circle"
+                        size={20}
+                        color={theme.colors.text}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                showsHorizontalScrollIndicator={false}
+                style={styles.selectedUsersList}
+              />
+            </View>
+          )}
           <FlatList
             data={filteredUsers}
             keyExtractor={(item) => item.id}
@@ -216,10 +274,17 @@ export default function NewChatModal({ visible, onClose, onCreate }) {
             }
             renderItem={({ item }) => (
               <TouchableOpacity
-                onPress={() => (isGroup ? null : handleCreateChat(item.id))}
+                onPress={() => {
+                  if (isGroup) {
+                    toggleUserSelection(item);
+                  } else {
+                    handleCreateChat(item.id);
+                  }
+                }}
                 style={[
                   styles.userRow,
                   { backgroundColor: theme.colors.background },
+                  isGroup && isUserSelected(item.id) && styles.selectedUser,
                 ]}
               >
                 <Avatar size={50} uri={item.image_url} />
@@ -231,6 +296,23 @@ export default function NewChatModal({ visible, onClose, onCreate }) {
                     {item.full_name || `${item.first_name} ${item.last_name}`}
                   </ThemeText>
                 </View>
+                {isGroup && (
+                  <View style={styles.selectionIndicator}>
+                    {isUserSelected(item.id) ? (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={24}
+                        color={theme.colors.primary}
+                      />
+                    ) : (
+                      <Ionicons
+                        name="ellipse-outline"
+                        size={24}
+                        color={theme.colors.grey}
+                      />
+                    )}
+                  </View>
+                )}
               </TouchableOpacity>
             )}
           />
@@ -242,13 +324,13 @@ export default function NewChatModal({ visible, onClose, onCreate }) {
                   styles.createBtn,
                   { backgroundColor: theme.colors.primary },
                 ]}
-                disabled={creating || !groupName || filteredUsers.length === 0}
+                disabled={creating || !groupName || selectedUsers.length === 0}
               >
                 {creating ? (
                   <ActivityIndicator color="white" />
                 ) : (
                   <ThemeText style={{ color: "white", fontWeight: "bold" }}>
-                    Create Group
+                    Create Group ({selectedUsers.length})
                   </ThemeText>
                 )}
               </TouchableOpacity>
@@ -307,26 +389,43 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   selectedUser: {
-    backgroundColor: "#e0e0e0",
+    backgroundColor: "rgba(0, 122, 255, 0.1)",
+  },
+  selectionIndicator: {
+    padding: 4,
+  },
+  selectedUsersContainer: {
+    marginBottom: 12,
+  },
+  selectedUsersList: {
+    maxHeight: 50,
+  },
+  selectedUserChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 122, 255, 0.1)",
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginRight: 8,
+    gap: 4,
+  },
+  selectedUserName: {
+    fontSize: 12,
+    maxWidth: 80,
+  },
+  removeUserButton: {
+    padding: 2,
   },
   buttonRow: {
     flexDirection: "row",
     marginTop: 16,
     gap: 8,
   },
-  cancelBtn: {
-    flex: 1,
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: "#eee",
-    marginRight: 8,
-  },
   createBtn: {
     flex: 1,
     alignItems: "center",
     padding: 12,
     borderRadius: 8,
-    backgroundColor: "#007AFF",
   },
 });

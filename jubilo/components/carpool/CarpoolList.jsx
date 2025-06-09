@@ -80,11 +80,15 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
                     style={{ marginRight: 4 }}
                   />
                   <ThemeText color={theme.colors.grey} style={{ fontSize: 14 }}>
-                    {carpool.max_seats}-{confirmedSeats} seats left
+                    {
+                      carpool.passengers.filter((p) => p.status === "confirmed")
+                        .length
+                    }
+                    /{carpool.max_seats} seats
                   </ThemeText>
                 </View>
                 <ThemeText color={theme.colors.primary} style={styles.price}>
-                  ${carpool.price}
+                  {carpool.price ? `€${carpool.price}` : "Free"}
                 </ThemeText>
               </View>
               {/* Car Info Row */}
