@@ -1,4 +1,4 @@
-import CustomBubble from "@/components/chats/ChatComponents";
+import CustomBubble from "@/components/chats/bubbles/CustomBubble";
 import { View } from "react-native";
 
 export default function renderMessage(props) {

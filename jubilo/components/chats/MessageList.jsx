@@ -16,6 +16,7 @@ export default function MessageList({
   scrollToBottom,
   renderUsernameOnMessage,
   listViewProps,
+  unread = 0,
 }) {
   return (
     <GiftedChat
@@ -24,7 +25,7 @@ export default function MessageList({
       user={user}
       text={text}
       onInputTextChanged={onInputTextChanged}
-      renderBubble={renderBubble}
+      renderBubble={(props) => renderBubble({ ...props, unread })}
       renderAvatar={null}
       //renderAvatar={renderAvatar}
       renderInputToolbar={renderInputToolbar}

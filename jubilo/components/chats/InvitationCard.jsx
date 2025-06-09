@@ -183,8 +183,8 @@ export default function InvitationCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 12,
-    marginVertical: 8,
+    borderRadius: 10,
+
     overflow: "hidden",
     shadowColor: "#000",
     shadowOpacity: 0.2,

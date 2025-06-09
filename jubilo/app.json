@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.repo2002.jubilo"
+      "bundleIdentifier": "com.repo2002.jubilo",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "This app needs access to your microphone to record audio messages."
+      }
     },
     "android": {
       "adaptiveIcon": {

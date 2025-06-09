@@ -6,27 +6,9 @@ import {
   Keyboard,
   Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
-
-const AttachmentOption = ({ icon, label, onPress }) => {
-  const theme = useTheme();
-  return (
-    <TouchableOpacity style={styles.option} onPress={onPress}>
-      <View
-        style={[
-          styles.iconContainer,
-          { backgroundColor: theme.colors.greyLight },
-        ]}
-      >
-        <Ionicons name={icon} size={24} color={theme.colors.text} />
-      </View>
-      <Text style={[styles.label, { color: theme.colors.text }]}>{label}</Text>
-    </TouchableOpacity>
-  );
-};
 
 export function AttachmentOverlay({ visible, onClose, onSelect }) {
   const theme = useTheme();
@@ -75,16 +57,6 @@ export function AttachmentOverlay({ visible, onClose, onSelect }) {
           label="Camera"
           icon="camera"
           onPress={() => onSelect("camera")}
-        />
-        <AttachmentButton
-          label="Voice"
-          icon="mic"
-          onPress={() => onSelect("audio")}
-        />
-        <AttachmentButton
-          label="Document"
-          icon="document"
-          onPress={() => onSelect("document")}
         />
       </View>
     </View>

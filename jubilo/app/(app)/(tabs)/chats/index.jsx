@@ -2,6 +2,7 @@ import EmptyState from "@/components/EmptyState";
 import ThemeText from "@/components/theme/ThemeText";
 import { useAuth } from "@/contexts/AuthContext";
 import { useChatSearch } from "@/contexts/SearchContext";
+import { getShortContent } from "@/helpers/common";
 import useChatList from "@/hooks/chat/useChatList";
 import { useTheme } from "@/hooks/theme";
 import { useRouter } from "expo-router";
@@ -41,7 +42,7 @@ export default function ChatsIndex() {
 
     switch (message.type) {
       case "text":
-        return message.text;
+        return getShortContent(message.text, 30);
       case "image":
         return "📷 Image";
       case "video":

@@ -1,4 +1,4 @@
-import TypingIndicator from "@/components/chats/ChatComponents";
+import TypingIndicator from "@/components/chats/system/TypingIndicator";
 import useTypingSubscription from "@/hooks/chat/useTypingSubscription";
 import { getTypingUsers } from "@/services/chatService";
 import { useState } from "react";

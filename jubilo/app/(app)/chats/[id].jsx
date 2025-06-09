@@ -1,17 +1,14 @@
 import defaultAvatar from "@/assets/images/default-avatar.png";
 import AttachmentHandler from "@/components/chats/AttachmentHandler";
 import { AttachmentOverlay } from "@/components/chats/AttachmentOverlay";
-import {
-  AttachmentButton,
-  CameraButton,
-  CustomAvatar,
-  CustomBubble,
-  CustomComposer,
-  CustomInputToolbar,
-  CustomSend,
-  VoiceNoteButton,
-} from "@/components/chats/ChatComponents";
+import CustomBubble from "@/components/chats/bubbles/CustomBubble";
+// import CustomAvatar from "@/components/chats/ChatComponents";
 import ChatHeader from "@/components/chats/ChatHeader";
+import AttachmentButton from "@/components/chats/input/AttachmentButton";
+import CameraButton from "@/components/chats/input/CameraButton";
+import CustomComposer from "@/components/chats/input/CustomComposer";
+import CustomInputToolbar from "@/components/chats/input/CustomInputToolbar";
+import CustomSend from "@/components/chats/input/CustomSend";
 import MessageList from "@/components/chats/MessageList";
 import MessageRenderer from "@/components/chats/MessageRenderer";
 import TypingIndicatorHandler from "@/components/chats/TypingIndicatorHandler";
@@ -102,6 +99,40 @@ export default function ChatScreen() {
     }
   };
 
+  // const {
+  //   isRecording,
+  //   audioUri,
+  //   error: recordingError,
+  //   startRecording,
+  //   stopRecording,
+  //   reset: resetRecording,
+  // } = useVoiceRecorder();
+
+  // const handleVoiceNote = async () => {
+  //   if (!isRecording) {
+  //     await startRecording();
+  //   } else {
+  //     const uri = await stopRecording();
+  //     if (uri) {
+  //       try {
+  //         await sendAttachment(
+  //           roomId,
+  //           user.id,
+  //           {
+  //             uri,
+  //             type: "audio/m4a", // or the correct MIME type
+  //             name: `voice_${Date.now()}.m4a`,
+  //           },
+  //           "audio"
+  //         );
+  //         resetRecording();
+  //       } catch (err) {
+  //         alert("Failed to send audio: " + err.message);
+  //       }
+  //     }
+  //   }
+  // };
+
   if (isLoading) {
     return (
       <View style={styles.centered}>
@@ -156,7 +187,8 @@ export default function ChatScreen() {
             text={inputText}
             onPressAttachment={() => setIsAttachmentVisible(true)}
             onPressCamera={() => handleAttachment("camera")}
-            onPressVoice={() => handleAttachment("audio")}
+            //onPressVoice={handleVoiceNote}
+            //isRecording={isRecording}
           />
         )}
         renderComposer={(props) => <CustomComposer {...props} theme={theme} />}
@@ -175,12 +207,12 @@ export default function ChatScreen() {
                   }}
                   theme={theme}
                 />
-                <VoiceNoteButton
+                {/* <VoiceNoteButton
                   onPress={() => {
-                    handleAttachment("audio");
+                    handleVoiceNote();
                   }}
                   theme={theme}
-                />
+                /> */}
               </>
             )}
           </>
@@ -213,6 +245,27 @@ export default function ChatScreen() {
           handleAttachment(type);
         }}
       />
+      {/* {isRecording && (
+        <View
+          style={{
+            position: "absolute",
+            bottom: 80,
+            left: 0,
+            right: 0,
+            alignItems: "center",
+          }}
+        >
+          <Text
+            style={{
+              color: theme.colors.error,
+              fontWeight: "bold",
+              fontSize: 16,
+            }}
+          >
+            Recording...
+          </Text>
+        </View>
+      )} */}
     </View>
   );
 }
