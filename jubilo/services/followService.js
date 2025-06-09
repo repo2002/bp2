@@ -3,8 +3,6 @@ import { notifyFollowRequest } from "@/services/notificationService";
 
 export const followUser = async (userId) => {
   try {
-    console.log("Starting followUser:", { userId });
-
     const {
       data: { user },
     } = await supabase.auth.getUser();

@@ -335,6 +335,15 @@ export const createGroupChat = async (userId, name, participantIds) => {
 // Get messages for a chat room
 export const getChatMessages = async (roomId, { limit = 50, before } = {}) => {
   try {
+    // First get the room to check if it's a group
+    const { data: room, error: roomError } = await supabase
+      .from("chat_rooms")
+      .select("is_group")
+      .eq("id", roomId)
+      .single();
+
+    if (roomError) throw roomError;
+
     let query = supabase
       .from("chat_messages")
       .select(
@@ -344,7 +353,7 @@ export const getChatMessages = async (roomId, { limit = 50, before } = {}) => {
           id,
           username,
           first_name,
-            last_name,
+          last_name,
           image_url
         ),
         reply:reply_to (
@@ -354,7 +363,6 @@ export const getChatMessages = async (roomId, { limit = 50, before } = {}) => {
           sender:sender_id (
             id,
             username
-            
           )
         )
       `
@@ -370,7 +378,14 @@ export const getChatMessages = async (roomId, { limit = 50, before } = {}) => {
     const { data, error } = await query;
 
     if (error) throw error;
-    return { success: true, data };
+
+    // Add is_group flag to each message
+    const messagesWithGroupFlag = data.map((msg) => ({
+      ...msg,
+      is_group: room.is_group,
+    }));
+
+    return { success: true, data: messagesWithGroupFlag };
   } catch (error) {
     console.error("Error fetching chat messages:", error);
     return { success: false, error: error.message };

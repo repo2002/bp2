@@ -36,6 +36,67 @@ export default function ChatsIndex() {
     room?.name?.toLowerCase().includes(search?.toLowerCase() || "")
   );
 
+  const getMessagePreview = (message) => {
+    if (!message) return null;
+
+    switch (message.type) {
+      case "text":
+        return message.text;
+      case "image":
+        return "📷 Image";
+      case "video":
+        return "🎥 Video";
+      case "audio":
+        return "🎵 Voice message";
+      case "document":
+        return "📄 Document";
+      case "invitation":
+        return "📅 Event invitation";
+      default:
+        return "New message";
+    }
+  };
+
+  const formatMessageTime = (date) => {
+    const messageDate = new Date(date);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    // Reset hours to compare dates only
+    const messageDay = new Date(
+      messageDate.getFullYear(),
+      messageDate.getMonth(),
+      messageDate.getDate()
+    );
+    const todayDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
+    const yesterdayDay = new Date(
+      yesterday.getFullYear(),
+      yesterday.getMonth(),
+      yesterday.getDate()
+    );
+
+    if (messageDay.getTime() === todayDay.getTime()) {
+      // Today - show time
+      return messageDate.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } else if (messageDay.getTime() === yesterdayDay.getTime()) {
+      // Yesterday
+      return "Yesterday";
+    } else {
+      // Older - show days ago
+      const diffTime = Math.abs(todayDay - messageDay);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return `${diffDays} days ago`;
+    }
+  };
+
   const renderConversation = ({ item }) => (
     <TouchableOpacity
       onPress={() => router.push(`/chats/${item.id}`)}
@@ -51,31 +112,24 @@ export default function ChatsIndex() {
         <View style={styles.conversationHeader}>
           <ThemeText style={styles.userName}>{item.name}</ThemeText>
           {item.lastMsg?.createdAt && (
-            <ThemeText style={styles.lastMessageTime}>
-              {new Date(item.lastMsg.createdAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+            <ThemeText style={styles.lastMessageTime} color={theme.colors.grey}>
+              {formatMessageTime(item.lastMsg.createdAt)}
             </ThemeText>
           )}
         </View>
         <View style={styles.messageContainer}>
           <View style={styles.messageRow}>
-            {item.is_group && item.lastMsg?.sender && (
-              <ThemeText style={styles.senderName} numberOfLines={1}>
+            {item.lastMsg?.sender && (
+              <ThemeText
+                style={styles.senderName}
+                color={theme.colors.grey}
+                numberOfLines={1}
+              >
                 {item.lastMsg.sender}:
               </ThemeText>
             )}
             <ThemeText color={theme.colors.grey} numberOfLines={1}>
-              {item.lastMsg?.type === "text"
-                ? item.lastMsg.text
-                : item.lastMsg?.type === "image"
-                ? "📷 Image"
-                : item.lastMsg?.type === "video"
-                ? "🎥 Video"
-                : item.lastMsg?.type === "audio"
-                ? "🎵 Voice message"
-                : "New message"}
+              {getMessagePreview(item.lastMsg)}
             </ThemeText>
           </View>
 
@@ -186,7 +240,6 @@ const styles = StyleSheet.create({
   },
   lastMessageTime: {
     fontSize: 12,
-    color: "#888",
   },
   messageContainer: {
     flexDirection: "row",
@@ -204,8 +257,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     marginRight: 4,
-    color: "#888",
-    maxWidth: 100,
+    maxWidth: 150,
   },
   unreadBadge: {
     minWidth: 20,

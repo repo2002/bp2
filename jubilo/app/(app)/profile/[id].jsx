@@ -46,22 +46,14 @@ export default function OtherUserProfile() {
     if (user) {
       // Check for pending follow requests
       getPendingFollowRequests().then((res) => {
-        console.log("Pending requests:", res.data);
         if (res.data && res.data.length > 0) {
           // Find if there's a request between these users
           const request = res.data.find((r) => {
-            console.log("Checking request:", {
-              followerId: r.follower.id,
-              followedId: r.followed.id,
-              userId: user.id,
-              authUserId: authUser?.id,
-            });
             // We are the requestee if the current user is being followed by the profile we're viewing
             return r.follower.id === user.id && r.followed.id === authUser?.id;
           });
 
           if (request) {
-            console.log("Found incoming request:", request);
             setPendingRequest(request);
           } else {
             setPendingRequest(null);
@@ -75,11 +67,6 @@ export default function OtherUserProfile() {
       getFollowStatus(user.id).then(({ data }) => {
         if (data) {
           setFollowStatus(data.status);
-          console.log("Follow status updated:", {
-            status: data.status,
-            userId: user.id,
-            authUserId: authUser?.id,
-          });
 
           // Check if both users are following each other
           if (data.status === "following") {
@@ -90,21 +77,10 @@ export default function OtherUserProfile() {
                   (f) => f.follower.id === user.id
                 );
                 setCanMessage(isFollowingBack);
-                console.log("Checking mutual follow:", {
-                  weFollowThem: data.status === "following",
-                  theyFollowUs: isFollowingBack,
-                  canMessage: isFollowingBack,
-                  ourFollowers: res.data.followers?.map((f) => ({
-                    id: f.follower.id,
-                    username: f.follower.username,
-                  })),
-                  profileUserId: user.id,
-                });
               }
             });
           } else {
             setCanMessage(false);
-            console.log("Not following, canMessage set to false");
           }
         }
       });
@@ -138,18 +114,6 @@ export default function OtherUserProfile() {
   const isPrivate = user.is_private;
   const hasPendingRequest = followStatus === "requested";
   const hasIncomingRequest = pendingRequest?.follower.id === user.id;
-
-  console.log("Profile state:", {
-    isMe,
-    isPrivate,
-    hasPendingRequest,
-    hasIncomingRequest,
-    pendingRequest,
-    followStatus,
-    canMessage,
-    userId: user?.id,
-    authUserId: authUser?.id,
-  });
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }}>

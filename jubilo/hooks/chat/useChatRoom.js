@@ -41,6 +41,7 @@ export default function useChatRoom(roomId, userId) {
         avatar: sender?.image_url || defaultAvatar,
       },
       metadata: msg.metadata,
+      isGroup: msg.is_group,
     };
   }, []);
 
@@ -70,7 +71,12 @@ export default function useChatRoom(roomId, userId) {
           setUnread(data.unread || 0);
           // Transform messages to GiftedChat format and sort newest first
           const transformedMessages = await Promise.all(
-            data.messages.map(transformMessage)
+            data.messages.map((msg) =>
+              transformMessage({
+                ...msg,
+                is_group: data.is_group,
+              })
+            )
           );
           transformedMessages.sort((a, b) => b.createdAt - a.createdAt); // Newest first
           setMessages(transformedMessages);
@@ -108,6 +114,7 @@ export default function useChatRoom(roomId, userId) {
           username: msg.sender_name || "Unknown",
           image_url: msg.sender_image_url || defaultAvatar,
         },
+        is_group: room?.is_group || false,
       });
       setMessages((prev) => {
         if (prev.some((m) => m._id === msg.id)) return prev;

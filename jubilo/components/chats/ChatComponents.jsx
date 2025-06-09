@@ -5,16 +5,14 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useState } from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { Image, Keyboard, Text, TouchableOpacity, View } from "react-native";
 import {
-  Avatar,
   Bubble,
   Composer,
   InputToolbar,
   Send,
   SystemMessage,
 } from "react-native-gifted-chat";
-import InvitationCard from "./InvitationCard";
 
 // Generate 25 distinct colors for group chat members
 const generateGroupColors = () => {
@@ -54,6 +52,8 @@ export const CustomBubble = (props) => {
   const { theme, currentMessage, currentUserId } = props;
   // Determine if this is a media message
   const isMedia = ["image", "video"].includes(currentMessage.type);
+  const isCurrentUser = currentMessage.user._id === currentUserId;
+
   return (
     <Bubble
       {...props}
@@ -78,9 +78,11 @@ export const CustomBubble = (props) => {
               }
             : {
                 backgroundColor: theme.colors.cardBackground,
-                borderRadius: 16,
-                padding: 8,
-                marginLeft: 0,
+                borderRadius: 8,
+                paddingVertical: 6,
+                paddingHorizontal: 8,
+                marginLeft: 4,
+                marginBottom: 4,
               },
         right:
           currentMessage.type === "invitation"
@@ -89,13 +91,11 @@ export const CustomBubble = (props) => {
             ? { backgroundColor: "transparent", borderRadius: 0, padding: 0 }
             : {
                 backgroundColor: theme.colors.primary,
-                borderRadius: 16,
+                borderRadius: 9,
                 padding: 8,
+                marginBottom: 4,
+                marginRight: 4,
               },
-      }}
-      textStyle={{
-        left: { color: theme.colors.text },
-        right: { color: "white" },
       }}
       renderTime={() => null}
       renderMessageText={() => null}
@@ -121,8 +121,29 @@ export const CustomAvatar = (props) => {
 };
 
 export const CustomInputToolbar = (props) => {
-  const { theme, text, onPressAttachment, onPressMedia, onPressVoice } = props;
+  const { theme, text, onPressAttachment, onPressCamera, onPressVoice } = props;
   const hasText = !!text && text.trim().length > 0;
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      () => {
+        setKeyboardVisible(true);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      "keyboardDidHide",
+      () => {
+        setKeyboardVisible(false);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
 
   return (
     <InputToolbar
@@ -130,11 +151,11 @@ export const CustomInputToolbar = (props) => {
       containerStyle={{
         backgroundColor: theme.colors.cardBackground,
         borderTopWidth: 0,
-        borderRadius: 100,
-        marginHorizontal: 8,
+        paddingHorizontal: keyboardVisible ? 0 : 12,
         flexDirection: "row",
         alignItems: "center",
-        paddingVertical: 0,
+        paddingVertical: 8,
+        paddingBottom: keyboardVisible ? 8 : 12,
         marginTop: 4,
       }}
       primaryStyle={{
@@ -149,7 +170,7 @@ export const CustomInputToolbar = (props) => {
       <AttachmentButton onPress={onPressAttachment} theme={theme} />
       {!hasText && (
         <>
-          <MediaPickerButton onPress={onPressMedia} theme={theme} />
+          <CameraButton onPress={onPressCamera} theme={theme} />
           <VoiceNoteButton onPress={onPressVoice} theme={theme} />
         </>
       )}
@@ -167,6 +188,16 @@ export const CustomComposer = (props) => {
         fontSize: 16,
       }}
       placeholderTextColor={theme.colors.grey}
+      textInputProps={{
+        multiline: true,
+        maxLength: 1000,
+        placeholderTextColor: theme.colors.grey,
+        autoFocus: false,
+        style: {
+          flex: 1,
+          padding: 8,
+        },
+      }}
     />
   );
 };
@@ -259,9 +290,9 @@ export const getGroupMemberColor = (userId) => {
   return GROUP_COLORS[index];
 };
 
-export const MediaPickerButton = ({ onPress, theme }) => (
+export const CameraButton = ({ onPress, theme }) => (
   <TouchableOpacity onPress={onPress} style={{ marginHorizontal: 4 }}>
-    <Ionicons name="image" size={24} color={theme.colors.text} />
+    <Ionicons name="camera" size={24} color={theme.colors.text} />
   </TouchableOpacity>
 );
 
@@ -280,14 +311,83 @@ export const CustomSystemMessage = (props) => (
   />
 );
 
+// Message Container Component
+const MessageContainer = ({ isCurrentUser, theme, children }) => (
+  <View
+    style={{
+      backgroundColor: isCurrentUser
+        ? theme.colors.primary
+        : theme.colors.cardBackground,
+      borderRadius: 10,
+    }}
+  >
+    {children}
+  </View>
+);
+
+// Sender Name Component
+const SenderName = ({ currentMessage, isCurrentUser, theme }) => {
+  if (isCurrentUser) return null;
+  return (
+    <Text
+      style={{
+        color: currentMessage.isGroup
+          ? getGroupMemberColor(currentMessage.user._id)
+          : theme.colors.grey,
+        fontSize: 14,
+        marginBottom: 4,
+
+        fontWeight: "700",
+        alignSelf: "flex-start",
+      }}
+    >
+      {currentMessage.user.name}
+    </Text>
+  );
+};
+
+// Message Timestamp Component
+const MessageTimestamp = ({ currentMessage, isCurrentUser, theme, style }) => (
+  <Text
+    style={{
+      fontSize: 10,
+      color: isCurrentUser ? "#FFFFFF" : theme.colors.text,
+      marginTop: 2,
+      marginLeft: 32,
+      alignSelf: "flex-end",
+      padding: 4,
+    }}
+  >
+    {new Date(currentMessage.createdAt).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}
+  </Text>
+);
+
+// Media Container Component
+const MediaContainer = ({ isCurrentUser, width, height, children }) => (
+  <View
+    style={{
+      width,
+      height,
+      borderTopLeftRadius: isCurrentUser ? 10 : 0,
+      borderTopRightRadius: isCurrentUser ? 10 : 0,
+    }}
+  >
+    {children}
+  </View>
+);
+
 function CustomMessageContent({ currentMessage, theme, currentUserId }) {
   const [signedUrl, setSignedUrl] = useState(null);
   const [loading, setLoading] = useState(false);
+  const isCurrentUser = currentMessage.user._id === currentUserId;
 
   // Always call the hook, but only use it for video
   const videoPlayer = useVideoPlayer(signedUrl, (player) => {
     if (currentMessage.type === "video") {
-      player.loop = true;
+      player.loop = false;
     }
   });
 
@@ -355,182 +455,155 @@ function CustomMessageContent({ currentMessage, theme, currentUserId }) {
   // Handle attachments
   if (currentMessage.type === "image" && signedUrl) {
     return (
-      <View style={{ alignItems: "flex-end" }}>
-        <Image
-          source={{ uri: signedUrl }}
-          style={{
-            width,
-            height,
-            borderWidth: 1,
-            borderColor: theme?.colors?.primary,
-            borderRadius: 6,
-          }}
-          resizeMode="cover"
+      <MessageContainer isCurrentUser={isCurrentUser} theme={theme}>
+        <SenderName
+          currentMessage={currentMessage}
+          isCurrentUser={isCurrentUser}
+          theme={theme}
         />
-        <Text
-          style={{
-            fontSize: 10,
-            color: theme.colors.grey,
-            marginTop: 2,
-            alignSelf:
-              currentMessage.user && currentUserId === currentMessage.user._id
-                ? "flex-end"
-                : "flex-start",
-          }}
+        <MediaContainer
+          isCurrentUser={isCurrentUser}
+          width={width}
+          height={height}
         >
-          {new Date(currentMessage.createdAt).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </Text>
-      </View>
+          <Image
+            source={{ uri: signedUrl }}
+            style={{ width: "100%", height: "100%" }}
+            resizeMode="cover"
+          />
+        </MediaContainer>
+        <MessageTimestamp
+          currentMessage={currentMessage}
+          isCurrentUser={isCurrentUser}
+          theme={theme}
+        />
+      </MessageContainer>
     );
   }
+
   if (currentMessage.type === "video" && signedUrl) {
     return (
-      <View style={{ alignItems: "flex-end" }}>
-        <VideoView
-          player={videoPlayer}
-          style={{
-            width,
-            height,
-            borderWidth: 1,
-            borderColor: theme?.colors?.primary,
-            borderRadius: 6,
-          }}
-          allowsFullscreen
-          allowsPictureInPicture
+      <MessageContainer isCurrentUser={isCurrentUser} theme={theme}>
+        <SenderName
+          currentMessage={currentMessage}
+          isCurrentUser={isCurrentUser}
+          theme={theme}
         />
-        <Text
-          style={{
-            fontSize: 10,
-            color: theme.colors.grey,
-            marginTop: 2,
-            alignSelf:
-              currentMessage.user && currentUserId === currentMessage.user._id
-                ? "flex-end"
-                : "flex-start",
-          }}
+        <MediaContainer
+          isCurrentUser={isCurrentUser}
+          width={width}
+          height={height}
         >
-          {new Date(currentMessage.createdAt).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </Text>
-      </View>
+          <VideoView
+            player={videoPlayer}
+            style={{ width: "100%", height: "100%" }}
+            allowsFullscreen
+            allowsPictureInPicture
+          />
+        </MediaContainer>
+        <MessageTimestamp
+          currentMessage={currentMessage}
+          isCurrentUser={isCurrentUser}
+          theme={theme}
+        />
+      </MessageContainer>
     );
   }
 
-  // Audio, document, and text messages remain unchanged
   if (currentMessage.type === "audio" && signedUrl) {
     return (
-      <TouchableOpacity
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          marginVertical: 4,
-        }}
-        onPress={() => Linking.openURL(signedUrl)}
-      >
-        <Ionicons
-          name="play-circle"
-          size={32}
-          color={theme?.colors?.primary || "#007AFF"}
+      <MessageContainer isCurrentUser={isCurrentUser} theme={theme}>
+        <SenderName
+          currentMessage={currentMessage}
+          isCurrentUser={isCurrentUser}
+          theme={theme}
         />
-        <Text style={{ marginLeft: 8, color: theme?.colors?.text || "#333" }}>
-          Play audio
-        </Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginVertical: 4,
+            padding: 8,
+          }}
+          onPress={() => Linking.openURL(signedUrl)}
+        >
+          <Ionicons
+            name="play-circle"
+            size={32}
+            color={theme?.colors?.primary || "#007AFF"}
+          />
+          <Text style={{ marginLeft: 8, color: theme?.colors?.text || "#333" }}>
+            Play audio
+          </Text>
+        </TouchableOpacity>
+        <MessageTimestamp
+          currentMessage={currentMessage}
+          isCurrentUser={isCurrentUser}
+          theme={theme}
+        />
+      </MessageContainer>
     );
   }
+
   if (currentMessage.type === "document" && signedUrl) {
     return (
-      <TouchableOpacity
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          marginVertical: 4,
-        }}
-        onPress={() => Linking.openURL(signedUrl)}
-      >
-        <Ionicons
-          name="document"
-          size={28}
-          color={theme?.colors?.primary || "#007AFF"}
+      <MessageContainer isCurrentUser={isCurrentUser} theme={theme}>
+        <SenderName
+          currentMessage={currentMessage}
+          isCurrentUser={isCurrentUser}
+          theme={theme}
         />
-        <Text style={{ marginLeft: 8, color: theme?.colors?.text || "#333" }}>
-          {currentMessage.metadata?.fileName || "Document"}
-        </Text>
-      </TouchableOpacity>
-    );
-  }
-
-  // Invitation messages
-  if (currentMessage.type === "invitation") {
-    let eventData;
-    try {
-      eventData = JSON.parse(currentMessage.text || currentMessage.content);
-    } catch (e) {
-      return <Text style={{ color: "red" }}>Invalid invitation data</Text>;
-    }
-    return (
-      <View style={{ alignItems: "flex-end", marginBottom: 0, padding: 0 }}>
-        <InvitationCard
-          event={eventData}
-          status={eventData.status || "pending"}
-          currentUserId={currentUserId}
-          onAccept={() => handleAccept(eventData.invitation_id)}
-          onDecline={() => handleDecline(eventData.invitation_id)}
-        />
-        <Text
+        <TouchableOpacity
           style={{
-            fontSize: 10,
-            color: theme.colors.grey,
-            marginTop: 2,
-            alignSelf:
-              currentMessage.user && currentUserId === currentMessage.user._id
-                ? "flex-end"
-                : "flex-start",
+            flexDirection: "row",
+            alignItems: "center",
+            marginVertical: 4,
+            padding: 8,
           }}
+          onPress={() => Linking.openURL(signedUrl)}
         >
-          {new Date(currentMessage.createdAt).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </Text>
-      </View>
+          <Ionicons
+            name="document"
+            size={28}
+            color={theme?.colors?.primary || "#007AFF"}
+          />
+          <Text style={{ marginLeft: 8, color: theme?.colors?.text || "#333" }}>
+            {currentMessage.metadata?.fileName || "Document"}
+          </Text>
+        </TouchableOpacity>
+        <MessageTimestamp
+          currentMessage={currentMessage}
+          isCurrentUser={isCurrentUser}
+          theme={theme}
+        />
+      </MessageContainer>
     );
   }
 
-  // Text messages (with timestamp inside bubble)
+  // Text messages
   if (currentMessage.text) {
     return (
-      <>
+      <MessageContainer isCurrentUser={isCurrentUser} theme={theme}>
+        <SenderName
+          currentMessage={currentMessage}
+          isCurrentUser={isCurrentUser}
+          theme={theme}
+        />
         <Text
           style={{
-            color: theme?.colors?.text || "#fff",
+            color: isCurrentUser ? "#FFFFFF" : theme.colors.text,
             fontSize: 16,
+            alignItems: "flex-start",
           }}
         >
           {currentMessage.text}
         </Text>
-        <Text
-          style={{
-            fontSize: 10,
-            color: theme.colors.grey,
-            marginTop: 4,
-            alignSelf:
-              currentMessage.user && currentUserId === currentMessage.user._id
-                ? "flex-end"
-                : "flex-start",
-          }}
-        >
-          {new Date(currentMessage.createdAt).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </Text>
-      </>
+        <MessageTimestamp
+          currentMessage={currentMessage}
+          isCurrentUser={isCurrentUser}
+          theme={theme}
+        />
+      </MessageContainer>
     );
   }
 

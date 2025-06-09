@@ -1,13 +1,14 @@
 import defaultAvatar from "@/assets/images/default-avatar.png";
 import AttachmentHandler from "@/components/chats/AttachmentHandler";
+import { AttachmentOverlay } from "@/components/chats/AttachmentOverlay";
 import {
   AttachmentButton,
+  CameraButton,
   CustomAvatar,
   CustomBubble,
   CustomComposer,
   CustomInputToolbar,
   CustomSend,
-  MediaPickerButton,
   VoiceNoteButton,
 } from "@/components/chats/ChatComponents";
 import ChatHeader from "@/components/chats/ChatHeader";
@@ -21,7 +22,7 @@ import useTypingStatus from "@/hooks/chat/useTypingStatus";
 import { useTheme } from "@/hooks/theme";
 import { markMessagesAsRead } from "@/services/chatService";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -32,6 +33,7 @@ export default function ChatScreen() {
   const [isAttachmentVisible, setIsAttachmentVisible] = useState(false);
   const [inputText, setInputText] = useState("");
   const router = useRouter();
+  const attachmentHandlerRef = useRef(null);
 
   // Get params safely
   const params = useLocalSearchParams();
@@ -86,11 +88,15 @@ export default function ChatScreen() {
     }
   };
 
+  const handleAttachment = (type) => {
+    if (attachmentHandlerRef.current) {
+      attachmentHandlerRef.current.handleAttachment(type);
+    }
+  };
+
   if (isLoading) {
     return (
-      <View
-        style={[styles.centered, { backgroundColor: theme.colors.background }]}
-      >
+      <View style={styles.centered}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
@@ -111,7 +117,6 @@ export default function ChatScreen() {
       style={{
         flex: 1,
         backgroundColor: theme.colors.background,
-        paddingBottom: 8,
       }}
     >
       <ChatHeader
@@ -142,12 +147,8 @@ export default function ChatScreen() {
             theme={theme}
             text={inputText}
             onPressAttachment={() => setIsAttachmentVisible(true)}
-            onPressMedia={() => {
-              /* open media picker */
-            }}
-            onPressVoice={() => {
-              /* start voice note */
-            }}
+            onPressCamera={() => handleAttachment("camera")}
+            onPressVoice={() => handleAttachment("audio")}
           />
         )}
         renderComposer={(props) => <CustomComposer {...props} theme={theme} />}
@@ -160,8 +161,18 @@ export default function ChatScreen() {
             />
             {!inputText && (
               <>
-                <MediaPickerButton onPress={() => {}} theme={theme} />
-                <VoiceNoteButton onPress={() => {}} theme={theme} />
+                <CameraButton
+                  onPress={() => {
+                    handleAttachment("camera");
+                  }}
+                  theme={theme}
+                />
+                <VoiceNoteButton
+                  onPress={() => {
+                    handleAttachment("audio");
+                  }}
+                  theme={theme}
+                />
               </>
             )}
           </>
@@ -183,10 +194,19 @@ export default function ChatScreen() {
         }}
       />
       <AttachmentHandler
+        ref={attachmentHandlerRef}
         roomId={roomId}
         userId={user.id}
         onAttachmentSent={() => setIsAttachmentVisible(false)}
         onError={(error) => alert(error)}
+      />
+      <AttachmentOverlay
+        visible={isAttachmentVisible}
+        onClose={() => setIsAttachmentVisible(false)}
+        onSelect={(type) => {
+          setIsAttachmentVisible(false);
+          handleAttachment(type);
+        }}
       />
     </View>
   );

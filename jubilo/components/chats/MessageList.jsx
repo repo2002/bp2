@@ -25,7 +25,8 @@ export default function MessageList({
       text={text}
       onInputTextChanged={onInputTextChanged}
       renderBubble={renderBubble}
-      renderAvatar={renderAvatar}
+      renderAvatar={null}
+      //renderAvatar={renderAvatar}
       renderInputToolbar={renderInputToolbar}
       renderComposer={renderComposer}
       renderSend={renderSend}

@@ -81,9 +81,15 @@ export default function useChatList(userId) {
               lastMsgSenderUser = userInfoMap[lastMsgSenderUser.id];
             }
             if (lastMsgSenderUser) {
-              const { first_name, last_name, username } = lastMsgSenderUser;
-              lastMsgSender = [first_name, last_name].filter(Boolean).join(" ");
-              if (!lastMsgSender) lastMsgSender = username || "Unknown";
+              if (lastMsgSenderUser.id === userId) {
+                lastMsgSender = "You";
+              } else {
+                const { first_name, last_name, username } = lastMsgSenderUser;
+                lastMsgSender = [first_name, last_name]
+                  .filter(Boolean)
+                  .join(" ");
+                if (!lastMsgSender) lastMsgSender = username || "Unknown";
+              }
             }
             // Always show a fallback avatar
             let avatar = room.is_group
@@ -105,7 +111,7 @@ export default function useChatList(userId) {
                 ? {
                     text: lastMsg.content,
                     sender: lastMsgSender,
-                    createdAt: lastMsg.createdAt,
+                    createdAt: lastMsg.created_at,
                     type: lastMsg.type,
                   }
                 : null,

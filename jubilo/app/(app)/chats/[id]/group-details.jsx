@@ -97,7 +97,7 @@ export default function GroupDetails() {
 
   const handleAddParticipant = async (userId) => {
     try {
-      const { success, error } = await addParticipant(chat.id, userId);
+      const { success, error } = await addParticipant(chat.id, user.id, userId);
       if (success) {
         // Refresh chat data
         const { success: refreshSuccess, data } = await getChatById(chat.id);
