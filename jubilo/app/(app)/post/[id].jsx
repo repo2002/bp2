@@ -10,7 +10,7 @@ import {
 } from "@/services/postService";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FlatList, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -24,6 +24,7 @@ export default function PostDetail() {
   const { user } = useAuth();
   const { openCommentSheet, openShareSheet } = useBottomSheet();
   const [openCommentOnLoad, setOpenCommentOnLoad] = useState(false);
+  const flatListRef = useRef(null);
 
   useEffect(() => {
     if (id) {
@@ -37,6 +38,18 @@ export default function PostDetail() {
       });
     }
   }, [id]);
+
+  // Scroll to the specific post when posts are loaded
+  useEffect(() => {
+    if (id && userPosts.length > 0) {
+      const index = userPosts.findIndex((p) => p.id === id);
+      if (index !== -1 && flatListRef.current) {
+        setTimeout(() => {
+          flatListRef.current.scrollToIndex({ index, animated: true });
+        }, 100);
+      }
+    }
+  }, [id, userPosts]);
 
   // Open comment sheet automatically if commentId is present
   useEffect(() => {
@@ -126,6 +139,7 @@ export default function PostDetail() {
         </View>
       </View>
       <FlatList
+        ref={flatListRef}
         data={userPosts}
         renderItem={({ item }) => (
           <PostCard

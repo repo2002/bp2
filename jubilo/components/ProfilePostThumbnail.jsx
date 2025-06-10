@@ -1,5 +1,6 @@
 import { getShortContent } from "@/helpers/common";
 import { useTheme } from "@/hooks/theme";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
 import ThemeText from "./theme/ThemeText";
@@ -17,7 +18,7 @@ export default function ProfilePostThumbnail({ post }) {
       style={styles.thumbnail}
       onPress={() =>
         router.push({
-          pathname: `/user/${post.user_id}/posts`,
+          pathname: `/post/${post.id}`,
           params: { postId: post.id },
         })
       }
@@ -35,6 +36,15 @@ export default function ProfilePostThumbnail({ post }) {
           <ThemeText style={styles.textPreview}>
             {getShortContent(post.content, 40) || "No content"}
           </ThemeText>
+        </View>
+      )}
+      {post.is_private && (
+        <View style={styles.lockContainer}>
+          <MaterialCommunityIcons
+            name="lock"
+            size={16}
+            color={theme.colors.error}
+          />
         </View>
       )}
     </TouchableOpacity>
@@ -65,5 +75,13 @@ const styles = StyleSheet.create({
   },
   textPreview: {
     fontSize: 12,
+  },
+  lockContainer: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    borderRadius: 12,
+    padding: 4,
   },
 });

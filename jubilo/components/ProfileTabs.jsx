@@ -17,6 +17,8 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import EmptyState from "./EmptyState";
 import ThemeText from "./theme/ThemeText";
+import UserCarpools from "./UserCarpools";
+import UserEvents from "./UserEvents";
 
 // Dummy tab data
 const TABS = [
@@ -147,11 +149,11 @@ export default function ProfileTabs({ userId }) {
       case "posts":
         return <PostsTab userId={userId} />;
       case "carpools":
-        return <EmptyState message="No carpools yet." />;
+        return <UserCarpools userId={userId} />;
       case "marketplace":
         return <EmptyState message="No marketplace items yet." />;
       case "events":
-        return <EmptyState message="No events yet." />;
+        return <UserEvents userId={userId} />;
       default:
         return null;
     }

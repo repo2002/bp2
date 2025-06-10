@@ -237,7 +237,6 @@ const styles = StyleSheet.create({
   },
   tabs: {
     flexDirection: "row",
-    borderBottomWidth: 1,
   },
   tab: {
     flex: 1,

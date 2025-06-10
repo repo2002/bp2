@@ -120,8 +120,12 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
                           },
                         ]}
                       >
-                        {requestStatus.charAt(0).toUpperCase() +
-                          requestStatus.slice(1)}
+                        {requestStatus === "cancelled"
+                          ? "Rejected"
+                          : requestStatus === "confirmed"
+                          ? "Accepted"
+                          : requestStatus.charAt(0).toUpperCase() +
+                            requestStatus.slice(1)}
                       </ThemeText>
                     </View>
                   )}
