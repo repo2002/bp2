@@ -6,11 +6,12 @@ export default function LoadingIndicator({
   text = "Loading...",
   size = "small",
   style,
+  color,
 }) {
   const theme = useTheme();
   return (
     <View style={[styles.container, style]}>
-      <ActivityIndicator size={size} color={theme.colors.primary} />
+      <ActivityIndicator size={size} color={color || theme.colors.primary} />
       {text ? <ThemeText style={styles.text}>{text}</ThemeText> : null}
     </View>
   );

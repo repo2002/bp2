@@ -657,3 +657,81 @@ export const sendAttachment = async (roomId, userId, file, type) => {
     return { success: false, error: error.message };
   }
 };
+
+// Send a checklist message
+export const sendChecklist = async (roomId, userId, title, items) => {
+  // 1. Create the chat message of type 'checklist'
+  const {
+    success: msgSuccess,
+    data: msgData,
+    error: msgError,
+  } = await sendMessage(
+    roomId,
+    userId,
+    null, // content is null, checklist data is in related tables
+    "checklist"
+  );
+  if (!msgSuccess) throw msgError;
+
+  // 2. Create the checklist
+  const { data: checklist, error: checklistError } = await supabase
+    .from("checklists")
+    .insert({
+      message_id: msgData.id,
+      title,
+    })
+    .select()
+    .single();
+  if (checklistError) throw checklistError;
+
+  // 3. Create checklist items
+  const itemsToInsert = items.map((content, idx) => ({
+    checklist_id: checklist.id,
+    content,
+    position: idx,
+  }));
+  const { error: itemsError } = await supabase
+    .from("checklist_items")
+    .insert(itemsToInsert);
+  if (itemsError) throw itemsError;
+
+  return { success: true };
+};
+
+// Get checklist, items, and checked state for a message (shared checklist)
+export const getChecklistForMessage = async (messageId) => {
+  // 1. Get checklist
+  const { data: checklist, error: checklistError } = await supabase
+    .from("checklists")
+    .select("id, title")
+    .eq("message_id", messageId)
+    .single();
+  if (checklistError) throw checklistError;
+
+  // 2. Get items (with checked and checked_by)
+  const { data: items, error: itemsError } = await supabase
+    .from("checklist_items")
+    .select("id, content, position, checked, checked_by")
+    .eq("checklist_id", checklist.id)
+    .order("position");
+  if (itemsError) throw itemsError;
+
+  return {
+    checklist,
+    items,
+  };
+};
+
+// Toggle a checklist item for all users (shared)
+export const toggleChecklistItemShared = async (itemId, userId, checked) => {
+  const update = {
+    checked,
+    checked_by: userId, // last user who checked/unchecked
+  };
+  const { error } = await supabase
+    .from("checklist_items")
+    .update(update)
+    .eq("id", itemId);
+  if (error) throw error;
+  return { success: true };
+};

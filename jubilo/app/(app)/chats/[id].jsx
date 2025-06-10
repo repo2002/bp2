@@ -4,6 +4,7 @@ import { AttachmentOverlay } from "@/components/chats/AttachmentOverlay";
 import CustomBubble from "@/components/chats/bubbles/CustomBubble";
 // import CustomAvatar from "@/components/chats/ChatComponents";
 import ChatHeader from "@/components/chats/ChatHeader";
+import ChecklistModal from "@/components/chats/CheckListModal";
 import AttachmentButton from "@/components/chats/input/AttachmentButton";
 import CameraButton from "@/components/chats/input/CameraButton";
 import CustomComposer from "@/components/chats/input/CustomComposer";
@@ -17,7 +18,7 @@ import useChatRoom from "@/hooks/chat/useChatRoom";
 import useSendMessage from "@/hooks/chat/useSendMessage";
 import useTypingStatus from "@/hooks/chat/useTypingStatus";
 import { useTheme } from "@/hooks/theme";
-import { markMessagesAsRead } from "@/services/chatService";
+import { markMessagesAsRead, sendChecklist } from "@/services/chatService";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
@@ -31,6 +32,7 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState("");
   const router = useRouter();
   const attachmentHandlerRef = useRef(null);
+  const [checklistModalVisible, setChecklistModalVisible] = useState(false);
 
   // Get params safely
   const params = useLocalSearchParams();
@@ -241,8 +243,8 @@ export default function ChatScreen() {
         visible={isAttachmentVisible}
         onClose={() => setIsAttachmentVisible(false)}
         onSelect={(type) => {
-          setIsAttachmentVisible(false);
-          handleAttachment(type);
+          if (type === "checklist") setChecklistModalVisible(true);
+          else handleAttachment(type);
         }}
       />
       {/* {isRecording && (
@@ -266,6 +268,15 @@ export default function ChatScreen() {
           </Text>
         </View>
       )} */}
+      <ChecklistModal
+        visible={checklistModalVisible}
+        onClose={() => setChecklistModalVisible(false)}
+        onSend={async (title, items) => {
+          await sendChecklist(roomId, user.id, title, items);
+          setChecklistModalVisible(false);
+        }}
+        theme={theme}
+      />
     </View>
   );
 }

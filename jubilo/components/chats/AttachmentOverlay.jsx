@@ -58,6 +58,11 @@ export function AttachmentOverlay({ visible, onClose, onSelect }) {
           icon="camera"
           onPress={() => onSelect("camera")}
         />
+        <AttachmentButton
+          label="Checklist"
+          icon="list"
+          onPress={() => onSelect("checklist")}
+        />
       </View>
     </View>
   );

@@ -47,12 +47,14 @@ export default function ChatsIndex() {
         return "📷 Image";
       case "video":
         return "🎥 Video";
-      case "audio":
-        return "🎵 Voice message";
-      case "document":
-        return "📄 Document";
+      // case "audio":
+      //   return "🎵 Voice message";
+      // case "document":
+      //   return "📄 Document";
       case "invitation":
         return "📅 Event invitation";
+      case "checklist":
+        return "✅ Checklist";
       default:
         return "New message";
     }
