@@ -556,15 +556,17 @@ export default function EventDetailsScreen() {
       />
 
       {/* Q&A BottomSheet */}
-      <EventQnABottomSheet
-        eventId={event.id}
-        visible={qnaSheetOpen}
-        onClose={() => setQnASheetOpen(false)}
-        canAsk={event.permissions?.canAnswerQnA}
-        canAnswer={event.permissions?.canAnswerQnA}
-        onQuestionAdded={refreshEvent}
-        questions={questions}
-      />
+      {event?.id && (
+        <EventQnABottomSheet
+          eventId={event.id}
+          visible={qnaSheetOpen}
+          onClose={() => setQnASheetOpen(false)}
+          canAsk={event.permissions?.canAnswerQnA}
+          canAnswer={event.permissions?.canAnswerQnA}
+          onQuestionAdded={refreshEvent}
+          questions={questions}
+        />
+      )}
 
       <EventParticipantsModal
         visible={participantsModalVisible}

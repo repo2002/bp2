@@ -3,7 +3,7 @@ import ThemeText from "@/components/theme/ThemeText";
 import { useEventQnA } from "@/hooks/events/useEventQnA";
 import { useTheme } from "@/hooks/theme";
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -30,7 +30,6 @@ export default function EventQnA({
   const theme = useTheme();
   const {
     questions,
-    loading,
     error,
     hasMore,
     posting,
@@ -47,29 +46,33 @@ export default function EventQnA({
   const [answerInputs, setAnswerInputs] = useState({});
   const [sortBy, setSortBy] = useState("upvotes");
   const [upvoting, setUpvoting] = useState({});
+  const [errorMessage, setErrorMessage] = useState(null);
 
-  const handleExpand = (questionId) => {
+  const handleExpand = useCallback((questionId) => {
     setExpanded((prev) => ({ ...prev, [questionId]: !prev[questionId] }));
-  };
+  }, []);
 
   const handleAsk = async () => {
     if (!newQuestion.trim()) return;
+    setErrorMessage(null);
     try {
       await postQuestion(newQuestion.trim());
       setNewQuestion("");
+      onQuestionAdded?.();
     } catch (err) {
-      console.error("Error posting question:", err);
+      setErrorMessage(err.message || "Failed to post question");
     }
   };
 
   const handleAnswer = async (questionId) => {
     const answer = answerInputs[questionId]?.trim();
     if (!answer) return;
+    setErrorMessage(null);
     try {
       await postAnswer(questionId, answer);
       setAnswerInputs((prev) => ({ ...prev, [questionId]: "" }));
     } catch (err) {
-      console.error("Error posting answer:", err);
+      setErrorMessage(err.message || "Failed to post answer");
     }
   };
 
@@ -79,212 +82,242 @@ export default function EventQnA({
     try {
       await upvoteQuestion(questionId);
     } catch (err) {
-      console.error("Error upvoting question:", err);
+      setErrorMessage(err.message || "Failed to upvote");
     } finally {
       setUpvoting((prev) => ({ ...prev, [questionId]: false }));
     }
   };
 
-  const renderAnswer = (answer) => (
-    <View key={answer.id} style={styles.answerRow}>
-      <Avatar
-        uri={answer.user?.image_url}
-        size={28}
-        style={{ marginRight: 8 }}
-      />
-      <View style={{ flex: 1 }}>
-        <ThemeText style={styles.answerText}>{answer.answer}</ThemeText>
-        <ThemeText style={styles.meta}>
-          {answer.user?.username} ·{" "}
-          {new Date(answer.created_at).toLocaleDateString()}
-        </ThemeText>
+  const renderAnswer = useCallback(
+    (answer) => (
+      <View key={`answer-${answer.id}`} style={styles.answerRow}>
+        <Avatar
+          uri={answer.user?.image_url}
+          size={28}
+          style={{ marginRight: 8 }}
+        />
+        <View style={{ flex: 1 }}>
+          <ThemeText style={styles.answerText}>{answer.answer}</ThemeText>
+          <ThemeText style={styles.meta}>
+            {answer.user?.username} ·{" "}
+            {new Date(answer.created_at).toLocaleDateString()}
+          </ThemeText>
+        </View>
       </View>
-    </View>
+    ),
+    []
   );
 
-  const sortedQuestions = [...questions].sort((a, b) => {
-    switch (sortBy) {
-      case "upvotes":
-        return (b.upvotes || 0) - (a.upvotes || 0);
-      case "recent":
-        return new Date(b.created_at) - new Date(a.created_at);
-      case "answers":
-        return (b.answers?.length || 0) - (a.answers?.length || 0);
-      default:
-        return 0;
-    }
-  });
+  const sortedQuestions = useMemo(() => {
+    return [...questions].sort((a, b) => {
+      switch (sortBy) {
+        case "upvotes":
+          return (b.upvotes || 0) - (a.upvotes || 0);
+        case "recent":
+          return new Date(b.created_at) - new Date(a.created_at);
+        case "answers":
+          return (b.answers?.length || 0) - (a.answers?.length || 0);
+        default:
+          return 0;
+      }
+    });
+  }, [questions, sortBy]);
 
-  const renderQuestion = ({ item }) => {
-    const isMostUpvoted =
-      sortBy === "upvotes" &&
-      item.upvotes > 0 &&
-      sortedQuestions[0]?.id === item.id;
-    const isMostAnswered =
-      sortBy === "answers" &&
-      item.answers?.length > 0 &&
-      sortedQuestions[0]?.id === item.id;
-    const isMostRecent =
-      sortBy === "recent" && sortedQuestions[0]?.id === item.id;
+  const renderQuestion = useCallback(
+    ({ item }) => {
+      const isMostUpvoted =
+        sortBy === "upvotes" &&
+        item.upvotes > 0 &&
+        sortedQuestions[0]?.id === item.id;
+      const isMostAnswered =
+        sortBy === "answers" &&
+        item.answers?.length > 0 &&
+        sortedQuestions[0]?.id === item.id;
+      const isMostRecent =
+        sortBy === "recent" && sortedQuestions[0]?.id === item.id;
 
-    return (
-      <View
-        style={[
-          styles.threadContainer,
-          {
-            borderBottomColor: theme.colors.text,
-            backgroundColor:
-              isMostUpvoted || isMostAnswered || isMostRecent
-                ? theme.colors.cardBackground
-                : undefined,
-          },
-        ]}
-      >
-        <View style={styles.questionRow}>
-          <Avatar
-            uri={item.user?.image_url}
-            size={32}
-            style={{ marginRight: 10 }}
-          />
-          <View style={{ flex: 1 }}>
-            <ThemeText style={styles.questionText}>{item.question}</ThemeText>
-            <View style={styles.metaRow}>
-              <ThemeText style={styles.meta}>
-                {item.user?.username} ·{" "}
-                {new Date(item.created_at).toLocaleDateString()}
-              </ThemeText>
-              <View style={styles.statsRow}>
-                <TouchableOpacity
-                  onPress={() => handleUpvote(item.id)}
-                  disabled={upvoting[item.id]}
-                  style={{ padding: 4 }}
-                >
-                  {upvoting[item.id] ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={theme.colors.primary}
-                    />
-                  ) : (
-                    <Ionicons
-                      name={
-                        upvoted[item.id]
-                          ? "arrow-up-circle"
-                          : "arrow-up-circle-outline"
-                      }
-                      size={20}
-                      color={
-                        upvoted[item.id]
-                          ? theme.colors.primary
-                          : theme.colors.text
-                      }
-                    />
-                  )}
-                </TouchableOpacity>
-                <ThemeText
-                  style={[
-                    styles.stat,
-                    {
-                      color: upvoted[item.id]
-                        ? theme.colors.primary
-                        : theme.colors.text,
-                    },
-                  ]}
-                >
-                  {item.upvotes || 0}
+      return (
+        <View
+          key={`question-${item.id}`}
+          style={[
+            styles.threadContainer,
+            {
+              borderBottomColor: theme.colors.text,
+              backgroundColor:
+                isMostUpvoted || isMostAnswered || isMostRecent
+                  ? theme.colors.cardBackground
+                  : undefined,
+            },
+          ]}
+        >
+          <View style={styles.questionRow}>
+            <Avatar
+              uri={item.user?.image_url}
+              size={32}
+              style={{ marginRight: 10 }}
+            />
+            <View style={{ flex: 1 }}>
+              <ThemeText style={styles.questionText}>{item.question}</ThemeText>
+              <View style={styles.metaRow}>
+                <ThemeText style={styles.meta}>
+                  {item.user?.username} ·{" "}
+                  {new Date(item.created_at).toLocaleDateString()}
                 </ThemeText>
-                <TouchableOpacity
-                  onPress={() => handleExpand(item.id)}
-                  style={{ padding: 4 }}
+                <View style={styles.statsRow}>
+                  <TouchableOpacity
+                    key={`upvote-${item.id}`}
+                    onPress={() => handleUpvote(item.id)}
+                    disabled={upvoting[item.id]}
+                    style={{ padding: 4 }}
+                  >
+                    {upvoting[item.id] ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={theme.colors.primary}
+                      />
+                    ) : (
+                      <Ionicons
+                        name={
+                          upvoted[item.id]
+                            ? "arrow-up-circle"
+                            : "arrow-up-circle-outline"
+                        }
+                        size={20}
+                        color={
+                          upvoted[item.id]
+                            ? theme.colors.primary
+                            : theme.colors.text
+                        }
+                      />
+                    )}
+                  </TouchableOpacity>
+                  <ThemeText
+                    style={[
+                      styles.stat,
+                      {
+                        color: upvoted[item.id]
+                          ? theme.colors.primary
+                          : theme.colors.text,
+                      },
+                    ]}
+                  >
+                    {item.upvotes || 0}
+                  </ThemeText>
+                  <TouchableOpacity
+                    key={`expand-${item.id}`}
+                    onPress={() => handleExpand(item.id)}
+                    style={{ padding: 4 }}
+                  >
+                    <Ionicons
+                      name="chatbubble-ellipses-outline"
+                      size={16}
+                      color={theme.colors.primary}
+                      style={{ marginLeft: 8 }}
+                    />
+                  </TouchableOpacity>
+                  <ThemeText style={styles.stat}>
+                    {item.answers?.length || 0}
+                  </ThemeText>
+                </View>
+              </View>
+              {item.answers?.length > 0 && !expanded[item.id] && (
+                <View
+                  key={`preview-${item.id}`}
+                  style={styles.mostUpvotedAnswerRow}
                 >
                   <Ionicons
-                    name="chatbubble-ellipses-outline"
+                    name="arrow-forward"
                     size={16}
                     color={theme.colors.primary}
-                    style={{ marginLeft: 8 }}
+                    style={{ marginRight: 4 }}
                   />
-                </TouchableOpacity>
-                <ThemeText style={styles.stat}>
-                  {item.answers?.length || 0}
-                </ThemeText>
-              </View>
+                  <ThemeText
+                    style={{ color: theme.colors.text, flex: 1 }}
+                    numberOfLines={1}
+                  >
+                    {item.answers[0].answer}
+                  </ThemeText>
+                </View>
+              )}
             </View>
-            {item.answers?.length > 0 && !expanded[item.id] && (
-              <View style={styles.mostUpvotedAnswerRow}>
-                <Ionicons
-                  name="arrow-forward"
-                  size={16}
-                  color={theme.colors.primary}
-                  style={{ marginRight: 4 }}
-                />
-                <ThemeText
-                  style={{ color: theme.colors.text, flex: 1 }}
-                  numberOfLines={1}
-                >
-                  {item.answers[0].answer}
-                </ThemeText>
-              </View>
-            )}
+            <TouchableOpacity
+              key={`expand-button-${item.id}`}
+              onPress={() => handleExpand(item.id)}
+              style={{ padding: 4 }}
+            >
+              <Ionicons
+                name={expanded[item.id] ? "chevron-up" : "chevron-down"}
+                size={20}
+                color={theme.colors.text}
+              />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            onPress={() => handleExpand(item.id)}
-            style={{ padding: 4 }}
-          >
-            <Ionicons
-              name={expanded[item.id] ? "chevron-up" : "chevron-down"}
-              size={20}
-              color={theme.colors.text}
-            />
-          </TouchableOpacity>
-        </View>
-        {expanded[item.id] && (
-          <View
-            style={[
-              styles.answersContainer,
-              { backgroundColor: theme.colors.background },
-            ]}
-          >
-            {item.answers && item.answers.length > 0 ? (
-              item.answers.map(renderAnswer)
-            ) : (
-              <ThemeText style={styles.noAnswers}>No answers yet.</ThemeText>
-            )}
-            {canAnswer && (
-              <View style={styles.answerInputRow}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: theme.colors.cardBackground,
-                      color: theme.colors.text,
-                    },
-                  ]}
-                  value={answerInputs[item.id] || ""}
-                  onChangeText={(text) =>
-                    setAnswerInputs((prev) => ({ ...prev, [item.id]: text }))
-                  }
-                  placeholder="Write an answer..."
-                  placeholderTextColor={theme.colors.textSecondary}
-                  onSubmitEditing={() => handleAnswer(item.id)}
-                  returnKeyType="send"
-                />
-                <TouchableOpacity
-                  style={styles.askBtn}
-                  onPress={() => handleAnswer(item.id)}
-                  disabled={!(answerInputs[item.id] || "").trim() || posting}
+          {expanded[item.id] && (
+            <View
+              key={`answers-${item.id}`}
+              style={[
+                styles.answersContainer,
+                { backgroundColor: theme.colors.background },
+              ]}
+            >
+              {item.answers && item.answers.length > 0 ? (
+                item.answers.map(renderAnswer)
+              ) : (
+                <ThemeText style={styles.noAnswers}>No answers yet.</ThemeText>
+              )}
+              {canAnswer && (
+                <View
+                  key={`answer-input-${item.id}`}
+                  style={styles.answerInputRow}
                 >
-                  <Ionicons
-                    name="send"
-                    size={22}
-                    color={theme.colors.primary}
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: theme.colors.cardBackground,
+                        color: theme.colors.text,
+                      },
+                    ]}
+                    value={answerInputs[item.id] || ""}
+                    onChangeText={(text) =>
+                      setAnswerInputs((prev) => ({ ...prev, [item.id]: text }))
+                    }
+                    placeholder="Write an answer..."
+                    placeholderTextColor={theme.colors.textSecondary}
+                    onSubmitEditing={() => handleAnswer(item.id)}
+                    returnKeyType="send"
                   />
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
-      </View>
-    );
-  };
+                  <TouchableOpacity
+                    key={`send-${item.id}`}
+                    style={styles.askBtn}
+                    onPress={() => handleAnswer(item.id)}
+                    disabled={!(answerInputs[item.id] || "").trim() || posting}
+                  >
+                    <Ionicons
+                      name="send"
+                      size={22}
+                      color={theme.colors.primary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+      );
+    },
+    [
+      theme,
+      sortBy,
+      sortedQuestions,
+      upvoting,
+      upvoted,
+      expanded,
+      answerInputs,
+      posting,
+      canAnswer,
+    ]
+  );
 
   return (
     <KeyboardAvoidingView
@@ -293,10 +326,17 @@ export default function EventQnA({
       keyboardVerticalOffset={80}
     >
       <View style={{ flex: 1 }}>
+        {errorMessage && (
+          <ThemeText
+            style={[styles.errorMessage, { color: theme.colors.error }]}
+          >
+            {errorMessage}
+          </ThemeText>
+        )}
         <View style={styles.sortRow}>
           {SORT_OPTIONS.map((option) => (
             <TouchableOpacity
-              key={option.value}
+              key={`sort-${option.value}`}
               style={[
                 styles.sortButton,
                 {
@@ -323,12 +363,12 @@ export default function EventQnA({
         </View>
         <FlatList
           data={sortedQuestions}
-          keyExtractor={(item) => item.id?.toString()}
+          keyExtractor={(item) => `question-list-${item.id}`}
           renderItem={renderQuestion}
           contentContainerStyle={{ paddingVertical: 8 }}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
-          refreshing={loading}
+          refreshing={false}
           onRefresh={refresh}
           ListEmptyComponent={
             <ThemeText
@@ -338,7 +378,7 @@ export default function EventQnA({
                 marginTop: 24,
               }}
             >
-              {loading ? "Loading..." : "No questions yet."}
+              No questions yet.
             </ThemeText>
           }
         />
@@ -382,6 +422,11 @@ export default function EventQnA({
 }
 
 const styles = StyleSheet.create({
+  errorMessage: {
+    textAlign: "center",
+    padding: 8,
+    marginBottom: 8,
+  },
   sortRow: {
     flexDirection: "row",
     padding: 8,

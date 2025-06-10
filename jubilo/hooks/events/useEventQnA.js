@@ -1,7 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const CACHE_KEY_PREFIX = "event_qna_";
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
@@ -10,7 +10,15 @@ export function useEventQnA(eventId) {
   const { user } = useAuth();
   const [questions, setQuestions] = useState([]);
   const [error, setError] = useState(null);
-  const [upvoted, setUpvoted] = useState({}); // { [questionId]: true }
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
+  const [posting, setPosting] = useState(false);
+  const [upvoted, setUpvoted] = useState({});
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [upvoting, setUpvoting] = useState({});
+
+  const PAGE_SIZE = 10;
 
   // Load from cache
   const loadCachedData = async () => {
@@ -44,56 +52,317 @@ export function useEventQnA(eventId) {
     }
   };
 
-  // Initial data fetch
-  useEffect(() => {
-    if (!eventId) return;
-
-    const fetchInitialData = async () => {
+  const fetchQuestions = useCallback(
+    async (pageNum = 0, shouldRefresh = false) => {
       try {
-        if (await loadCachedData()) return;
+        setError(null);
+        if (pageNum === 0) {
+          setLoading(true);
+        }
 
-        const { data, error: err } = await supabase
+        const start = pageNum * PAGE_SIZE;
+        const end = start + PAGE_SIZE - 1;
+
+        const { data: questionsData, error: questionsError } = await supabase
           .from("event_questions")
           .select(
-            `*, 
-            user:profiles!event_questions_user_id_fkey(*), 
-            answers:event_answers(*, user:profiles!event_answers_user_id_fkey(*)),
-            upvotes:event_question_upvotes(user_id)`
+            `
+          *,
+          user:user_id (
+            id,
+            username,
+            image_url
+          ),
+          answers:event_answers (
+            id,
+            answer,
+            created_at,
+            user:user_id (
+              id,
+              username,
+              image_url
+            )
+          ),
+          upvotes:event_question_upvotes (
+            user_id
+          )
+        `
           )
           .eq("event_id", eventId)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .range(start, end);
 
-        if (err) throw err;
+        if (questionsError) throw questionsError;
 
-        // Process upvotes
-        const processedData = data.map((q) => ({
-          ...q,
-          upvotes: q.upvotes?.length || 0,
-          hasUpvoted: q.upvotes?.some((u) => u.user_id === user?.id) || false,
+        // Get upvoted questions for current user
+        const { data: upvotedData, error: upvotedError } = await supabase
+          .from("event_question_upvotes")
+          .select("question_id")
+          .eq("user_id", user.id)
+          .in(
+            "question_id",
+            questionsData.map((q) => q.id)
+          );
+
+        if (upvotedError) throw upvotedError;
+
+        const upvotedMap = {};
+        upvotedData.forEach((upvote) => {
+          upvotedMap[upvote.question_id] = true;
+        });
+
+        const processedQuestions = questionsData.map((question) => ({
+          ...question,
+          upvotes: question.upvotes?.length || 0,
+          answers: question.answers || [],
         }));
 
-        setQuestions(processedData);
-        await cacheData(processedData);
+        if (shouldRefresh) {
+          setQuestions((prev) => {
+            const all = [...prev, ...processedQuestions];
+            const unique = [];
+            const seen = new Set();
+            for (const q of all) {
+              if (!seen.has(q.id)) {
+                unique.push(q);
+                seen.add(q.id);
+              }
+            }
+            return unique;
+          });
+        } else {
+          setQuestions((prev) => {
+            const all = [...prev, ...processedQuestions];
+            const unique = [];
+            const seen = new Set();
+            for (const q of all) {
+              if (!seen.has(q.id)) {
+                unique.push(q);
+                seen.add(q.id);
+              }
+            }
+            return unique;
+          });
+        }
 
-        // Load upvoted state
-        const upvotedRaw = await AsyncStorage.getItem(
-          `event_qna_upvoted_${user?.id}_${eventId}`
-        );
-        setUpvoted(upvotedRaw ? JSON.parse(upvotedRaw) : {});
+        setUpvoted((prev) => ({ ...prev, ...upvotedMap }));
+        setHasMore(questionsData.length === PAGE_SIZE);
+        setPage(pageNum);
       } catch (err) {
+        console.error("Error fetching questions:", err);
         setError(err.message);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-    };
+    },
+    [eventId, user.id]
+  );
 
-    fetchInitialData();
-  }, [eventId, user?.id]);
+  const postQuestion = useCallback(
+    async (question) => {
+      if (!user) throw new Error("You must be logged in to post a question");
+      if (!question.trim()) throw new Error("Question cannot be empty");
 
-  // Real-time subscription
+      setPosting(true);
+      try {
+        const { data, error } = await supabase
+          .from("event_questions")
+          .insert([
+            {
+              event_id: eventId,
+              user_id: user.id,
+              question: question.trim(),
+            },
+          ])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Optimistically update the UI
+        setQuestions((prev) => {
+          const all = [
+            ...prev,
+            {
+              ...data,
+              user: {
+                id: user.id,
+                username: user.username,
+                image_url: user.image_url,
+              },
+              upvotes: 0,
+              answers: [],
+            },
+          ];
+          const unique = [];
+          const seen = new Set();
+          for (const q of all) {
+            if (!seen.has(q.id)) {
+              unique.push(q);
+              seen.add(q.id);
+            }
+          }
+          return unique;
+        });
+
+        return data;
+      } catch (err) {
+        console.error("Error posting question:", err);
+        throw err;
+      } finally {
+        setPosting(false);
+      }
+    },
+    [eventId, user]
+  );
+
+  const postAnswer = useCallback(
+    async (questionId, answer) => {
+      if (!user) throw new Error("You must be logged in to post an answer");
+      if (!answer.trim()) throw new Error("Answer cannot be empty");
+
+      try {
+        const { data, error } = await supabase
+          .from("event_answers")
+          .insert([
+            {
+              question_id: questionId,
+              user_id: user.id,
+              answer: answer.trim(),
+            },
+          ])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Optimistically update the UI
+        setQuestions((prev) =>
+          prev.map((q) =>
+            q.id === questionId
+              ? {
+                  ...q,
+                  answers: [
+                    {
+                      ...data,
+                      user: {
+                        id: user.id,
+                        username: user.username,
+                        image_url: user.image_url,
+                      },
+                    },
+                    ...(q.answers || []),
+                  ],
+                }
+              : q
+          )
+        );
+
+        return data;
+      } catch (err) {
+        console.error("Error posting answer:", err);
+        throw err;
+      }
+    },
+    [user]
+  );
+
+  const upvoteQuestion = useCallback(
+    async (questionId) => {
+      if (!user) throw new Error("You must be logged in to upvote");
+      if (upvoting[questionId]) return;
+
+      setUpvoting((prev) => ({ ...prev, [questionId]: true }));
+      try {
+        const isUpvoted = upvoted[questionId];
+
+        if (isUpvoted) {
+          const { error } = await supabase
+            .from("event_question_upvotes")
+            .delete()
+            .eq("question_id", questionId)
+            .eq("user_id", user.id);
+
+          if (error) throw error;
+
+          // Optimistically update the UI
+          setQuestions((prev) =>
+            prev.map((q) =>
+              q.id === questionId
+                ? { ...q, upvotes: Math.max(0, (q.upvotes || 0) - 1) }
+                : q
+            )
+          );
+          setUpvoted((prev) => ({ ...prev, [questionId]: false }));
+        } else {
+          const { error } = await supabase
+            .from("event_question_upvotes")
+            .insert([
+              {
+                question_id: questionId,
+                user_id: user.id,
+              },
+            ]);
+
+          if (error) throw error;
+
+          // Optimistically update the UI
+          setQuestions((prev) =>
+            prev.map((q) =>
+              q.id === questionId ? { ...q, upvotes: (q.upvotes || 0) + 1 } : q
+            )
+          );
+          setUpvoted((prev) => ({ ...prev, [questionId]: true }));
+        }
+      } catch (err) {
+        console.error("Error upvoting question:", err);
+        throw err;
+      } finally {
+        setUpvoting((prev) => ({ ...prev, [questionId]: false }));
+      }
+    },
+    [user, upvoted, upvoting]
+  );
+
+  const loadMore = useCallback(() => {
+    if (!hasMore || loading) return;
+    fetchQuestions(page + 1);
+  }, [hasMore, loading, page, fetchQuestions]);
+
+  const refresh = useCallback(() => {
+    setRefreshing(true);
+    fetchQuestions(0, true);
+  }, [fetchQuestions]);
+
+  // Set up real-time subscriptions
   useEffect(() => {
     if (!eventId) return;
 
-    const channel = supabase
-      .channel(`event_qna:${eventId}`)
+    // Subscribe to new questions
+    const questionsSubscription = supabase
+      .channel(`event_questions:${eventId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "event_questions",
+          filter: `event_id=eq.${eventId}`,
+        },
+        (payload) => {
+          // Only add if not already in the list
+          setQuestions((prev) => {
+            if (prev.some((q) => q.id === payload.new.id)) return prev;
+            return [payload.new, ...prev];
+          });
+        }
+      )
+      .subscribe();
+
+    // Subscribe to question updates (including upvotes)
+    const questionUpdatesSubscription = supabase
+      .channel(`event_question_updates:${eventId}`)
       .on(
         "postgres_changes",
         {
@@ -103,275 +372,121 @@ export function useEventQnA(eventId) {
           filter: `event_id=eq.${eventId}`,
         },
         (payload) => {
-          if (payload.eventType === "INSERT") {
-            // Fetch the full question data with upvotes
-            supabase
-              .from("event_questions")
-              .select(
-                `*, 
-                user:profiles!event_questions_user_id_fkey(*), 
-                answers:event_answers(*, user:profiles!event_answers_user_id_fkey(*)),
-                upvotes:event_question_upvotes(user_id)`
-              )
-              .eq("id", payload.new.id)
-              .single()
-              .then(({ data }) => {
-                if (data) {
-                  const processedData = {
-                    ...data,
-                    upvotes: data.upvotes?.length || 0,
-                    hasUpvoted:
-                      data.upvotes?.some((u) => u.user_id === user?.id) ||
-                      false,
-                  };
-                  setQuestions((prev) => [processedData, ...prev]);
-                }
-              });
-          } else if (payload.eventType === "DELETE") {
-            setQuestions((prev) => prev.filter((q) => q.id !== payload.old.id));
-          } else if (payload.eventType === "UPDATE") {
-            setQuestions((prev) =>
-              prev.map((q) =>
-                q.id === payload.new.id ? { ...q, ...payload.new } : q
-              )
-            );
-          }
+          setQuestions((prev) =>
+            prev.map((q) =>
+              q.id === payload.new.id ? { ...q, ...payload.new } : q
+            )
+          );
         }
       )
+      .subscribe();
+
+    // Subscribe to new answers
+    const answersSubscription = supabase
+      .channel(`event_answers:${eventId}`)
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "INSERT",
           schema: "public",
           table: "event_answers",
-          filter: `event_id=eq.${eventId}`,
+          filter: `question_id=in.(${questions.map((q) => q.id).join(",")})`,
         },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
-            // Fetch the full answer data
-            supabase
-              .from("event_answers")
-              .select(`*, user:profiles!event_answers_user_id_fkey(*)`)
-              .eq("id", payload.new.id)
-              .single()
-              .then(({ data }) => {
-                if (data) {
-                  setQuestions((prev) =>
-                    prev.map((q) => {
-                      if (q.id === data.question_id) {
-                        return {
-                          ...q,
-                          answers: [...(q.answers || []), data],
-                        };
-                      }
-                      return q;
-                    })
-                  );
-                }
-              });
-          } else if (payload.eventType === "DELETE") {
-            setQuestions((prev) =>
-              prev.map((q) => {
-                if (q.id === payload.old.question_id) {
-                  return {
+        async (payload) => {
+          // Fetch the user details for the new answer
+          const { data: userData } = await supabase
+            .from("users")
+            .select("id, username, image_url")
+            .eq("id", payload.new.user_id)
+            .single();
+
+          setQuestions((prev) =>
+            prev.map((q) =>
+              q.id === payload.new.question_id
+                ? {
                     ...q,
-                    answers: (q.answers || []).filter(
-                      (a) => a.id !== payload.old.id
-                    ),
-                  };
-                }
-                return q;
-              })
-            );
-          } else if (payload.eventType === "UPDATE") {
-            setQuestions((prev) =>
-              prev.map((q) => {
-                if (q.id === payload.new.question_id) {
-                  return {
-                    ...q,
-                    answers: (q.answers || []).map((a) =>
-                      a.id === payload.new.id ? payload.new : a
-                    ),
-                  };
-                }
-                return q;
-              })
-            );
-          }
+                    answers: [
+                      {
+                        ...payload.new,
+                        user: userData,
+                      },
+                      ...(q.answers || []),
+                    ],
+                  }
+                : q
+            )
+          );
         }
       )
+      .subscribe();
+
+    // Subscribe to upvote changes
+    const upvotesSubscription = supabase
+      .channel(`event_question_upvotes:${eventId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "event_question_upvotes",
-          filter: `event_id=eq.${eventId}`,
+          filter: `question_id=in.(${questions.map((q) => q.id).join(",")})`,
         },
         (payload) => {
           if (payload.eventType === "INSERT") {
             setQuestions((prev) =>
-              prev.map((q) => {
-                if (q.id === payload.new.question_id) {
-                  return {
-                    ...q,
-                    upvotes: (q.upvotes || 0) + 1,
-                    hasUpvoted:
-                      payload.new.user_id === user?.id ? true : q.hasUpvoted,
-                  };
-                }
-                return q;
-              })
+              prev.map((q) =>
+                q.id === payload.new.question_id
+                  ? { ...q, upvotes: (q.upvotes || 0) + 1 }
+                  : q
+              )
             );
+            if (payload.new.user_id === user.id) {
+              setUpvoted((prev) => ({
+                ...prev,
+                [payload.new.question_id]: true,
+              }));
+            }
           } else if (payload.eventType === "DELETE") {
             setQuestions((prev) =>
-              prev.map((q) => {
-                if (q.id === payload.old.question_id) {
-                  return {
-                    ...q,
-                    upvotes: (q.upvotes || 0) - 1,
-                    hasUpvoted:
-                      payload.old.user_id === user?.id ? false : q.hasUpvoted,
-                  };
-                }
-                return q;
-              })
+              prev.map((q) =>
+                q.id === payload.old.question_id
+                  ? { ...q, upvotes: Math.max(0, (q.upvotes || 0) - 1) }
+                  : q
+              )
             );
+            if (payload.old.user_id === user.id) {
+              setUpvoted((prev) => ({
+                ...prev,
+                [payload.old.question_id]: false,
+              }));
+            }
           }
         }
       )
       .subscribe();
 
+    // Initial fetch
+    fetchQuestions();
+
     return () => {
-      channel.unsubscribe();
+      questionsSubscription.unsubscribe();
+      questionUpdatesSubscription.unsubscribe();
+      answersSubscription.unsubscribe();
+      upvotesSubscription.unsubscribe();
     };
-  }, [eventId, user?.id]);
-
-  // Post a new question
-  const postQuestion = async (question) => {
-    try {
-      const { data, error: err } = await supabase
-        .from("event_questions")
-        .insert({
-          event_id: eventId,
-          question,
-          user_id: user.id,
-        })
-        .select(
-          `
-          *,
-          user:profiles!event_questions_user_id_fkey(*)
-        `
-        )
-        .single();
-
-      if (err) throw err;
-
-      // Update state directly
-      setQuestions((prev) => [
-        {
-          ...data,
-          upvotes: 0,
-          hasUpvoted: false,
-          answers: [],
-        },
-        ...prev,
-      ]);
-      return data;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    }
-  };
-
-  // Post an answer
-  const postAnswer = async (questionId, answer) => {
-    try {
-      const { data, error: err } = await supabase
-        .from("event_answers")
-        .insert({
-          question_id: questionId,
-          answer,
-          user_id: user.id,
-        })
-        .select(
-          `
-          *,
-          user:profiles!event_answers_user_id_fkey(*)
-        `
-        )
-        .single();
-
-      if (err) throw err;
-
-      // Update state directly
-      setQuestions((prev) =>
-        prev.map((q) => {
-          if (q.id === questionId) {
-            return {
-              ...q,
-              answers: [...(q.answers || []), data],
-            };
-          }
-          return q;
-        })
-      );
-
-      return data;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    }
-  };
-
-  // Upvote a question
-  const upvoteQuestion = async (questionId) => {
-    try {
-      const { data: result, error: err } = await supabase.rpc(
-        "upvote_event_question",
-        {
-          qid: questionId,
-          uid: user.id,
-        }
-      );
-      if (err) throw err;
-
-      // Update local state
-      const newUpvoted = { ...upvoted, [questionId]: result.upvoted };
-      setUpvoted(newUpvoted);
-      await AsyncStorage.setItem(
-        `event_qna_upvoted_${user?.id}_${eventId}`,
-        JSON.stringify(newUpvoted)
-      );
-
-      // Update questions list with new upvote count
-      setQuestions((prev) =>
-        prev.map((q) => {
-          if (q.id === questionId) {
-            return {
-              ...q,
-              upvotes:
-                result.action === "added"
-                  ? (q.upvotes || 0) + 1
-                  : (q.upvotes || 0) - 1,
-              hasUpvoted: result.action === "added",
-            };
-          }
-          return q;
-        })
-      );
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    }
-  };
+  }, [eventId, user.id, questions, fetchQuestions]);
 
   return {
     questions,
     error,
+    hasMore,
+    posting,
+    upvoting,
+    upvoted,
     postQuestion,
     postAnswer,
     upvoteQuestion,
-    upvoted,
+    loadMore,
+    refresh,
   };
 }

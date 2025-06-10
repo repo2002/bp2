@@ -1,6 +1,7 @@
 import { sendMessage } from "@/services/chatService";
 import { decode } from "base64-arraybuffer";
 import * as FileSystem from "expo-file-system";
+import * as ImageManipulator from "expo-image-manipulator";
 import { supabase } from "../lib/supabase";
 
 export const getEvents = async ({
@@ -12,18 +13,6 @@ export const getEvents = async ({
   category = null,
 } = {}) => {
   try {
-    // Get current user for debugging
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    // Debug query to check if there are any events at all
-    const { data: allEvents, error: debugError } = await supabase
-      .from("events")
-      .select("*")
-      .limit(1);
-
     let query = supabase
       .from("events")
       .select(
@@ -43,7 +32,7 @@ export const getEvents = async ({
             id,
             username,
             first_name,
-          last_name,
+            last_name,
             image_url
           )
         ),
@@ -64,6 +53,11 @@ export const getEvents = async ({
     }
     if (category) {
       query = query.eq("category", category);
+    }
+    if (userId) {
+      query = query.or(
+        `creator_id.eq.${userId},participants.user_id.eq.${userId}`
+      );
     }
 
     // Pagination
@@ -89,50 +83,7 @@ export const getEvents = async ({
 
 export const getEventDetails = async (eventId, currentUserId = null) => {
   try {
-    // First, check if the event exists and get basic info
-    const { data: basicEvent, error: basicError } = await supabase
-      .from("events")
-      .select("id, is_private, creator_id")
-      .eq("id", eventId)
-      .single();
-
-    if (basicError) throw basicError;
-    if (!basicEvent) throw new Error("Event not found");
-
-    // For private events, check permissions
-    if (basicEvent.is_private) {
-      // Check if user is the creator
-      const isCreator = currentUserId === basicEvent.creator_id;
-      if (isCreator) {
-        // Creator can always view their own events
-      } else {
-        // Check if user is invited or a participant
-        const { data: invitation, error: inviteError } = await supabase
-          .from("event_invitations")
-          .select("status")
-          .eq("event_id", eventId)
-          .eq("user_id", currentUserId)
-          .single();
-
-        const { data: participant, error: participantError } = await supabase
-          .from("event_participants")
-          .select("status")
-          .eq("event_id", eventId)
-          .eq("user_id", currentUserId)
-          .single();
-
-        if (inviteError && inviteError.code !== "PGRST116") throw inviteError;
-        if (participantError && participantError.code !== "PGRST116")
-          throw participantError;
-
-        // If user is not invited or a participant, they can't view the event
-        if (!invitation && !participant) {
-          throw new Error("You don't have permission to view this event");
-        }
-      }
-    }
-
-    // Fetch all event details in one query
+    // Fetch all event details in one query with permissions
     const { data, error } = await supabase
       .from("events")
       .select(
@@ -222,6 +173,21 @@ export const getEventDetails = async (eventId, currentUserId = null) => {
 
     if (error) throw error;
     if (!data) throw new Error("Event not found");
+
+    // For private events, check permissions
+    if (data.is_private && currentUserId) {
+      const isCreator = currentUserId === data.creator_id;
+      const isParticipant = data.participants?.some(
+        (p) => p.user?.id === currentUserId
+      );
+      const isInvited = data.invites?.some(
+        (i) => i.user?.id === currentUserId && i.status === "pending"
+      );
+
+      if (!isCreator && !isParticipant && !isInvited) {
+        throw new Error("You don't have permission to view this event");
+      }
+    }
 
     // Permissions & status helpers
     const isOwner = currentUserId && data.creator_id === currentUserId;
@@ -501,8 +467,15 @@ export const createEventPost = async (eventId, content) => {
 
 export const uploadEventImage = async (eventId, fileUri, isPrimary = false) => {
   try {
+    // Validate and compress image
+    const compressedImage = await ImageManipulator.manipulateAsync(
+      fileUri,
+      [{ resize: { width: 1920, height: 1080 } }],
+      { compress: 0.8, format: "jpeg" }
+    );
+
     // Read the file as base64
-    const fileBase64 = await FileSystem.readAsStringAsync(fileUri, {
+    const fileBase64 = await FileSystem.readAsStringAsync(compressedImage.uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
     const decodedImageData = decode(fileBase64);
@@ -520,10 +493,7 @@ export const uploadEventImage = async (eventId, fileUri, isPrimary = false) => {
         upsert: true,
       });
 
-    if (uploadError) {
-      console.error("Error uploading image:", uploadError);
-      return { success: false, error: uploadError.message };
-    }
+    if (uploadError) throw uploadError;
 
     // Get the public URL
     const {
@@ -550,10 +520,7 @@ export const uploadEventImage = async (eventId, fileUri, isPrimary = false) => {
       .select()
       .single();
 
-    if (dbError) {
-      console.error("Error creating image record:", dbError);
-      return { success: false, error: dbError.message };
-    }
+    if (dbError) throw dbError;
 
     return { success: true, data: imageRecord };
   } catch (error) {
