@@ -6,12 +6,12 @@ import { useTheme } from "@/hooks/theme";
 import { getSupabaseFileUrl } from "@/services/postService";
 import { getUsers } from "@/services/userService";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { forwardRef, useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Share,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -23,7 +23,7 @@ import UserChip from "./UserChip";
 
 const ShareBottomSheet = forwardRef((_, ref) => {
   const theme = useTheme();
-  const snapPoints = useMemo(() => ["50%"], []);
+  const snapPoints = useMemo(() => ["50%", "75"], []);
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [shareLoading, setShareLoading] = useState(false);
@@ -83,6 +83,7 @@ const ShareBottomSheet = forwardRef((_, ref) => {
     <BottomSheetModal
       ref={shareSheetRef}
       snapPoints={snapPoints}
+      keyboardBehavior="extend"
       title={
         <View
           style={{
@@ -123,7 +124,7 @@ const ShareBottomSheet = forwardRef((_, ref) => {
             marginBottom: 12,
           }}
         >
-          <TextInput
+          <BottomSheetTextInput
             placeholder="Search users..."
             value={search}
             onChangeText={setSearch}

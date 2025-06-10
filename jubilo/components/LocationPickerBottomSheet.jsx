@@ -1,7 +1,7 @@
 import GooglePlacesInput from "@/components/GooglePlacesInput";
 import { useTheme } from "@/hooks/theme";
-import React, { useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
+import React, { useMemo, useState } from "react";
+import { StyleSheet } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import BottomSheetModal from "./BottomSheetModal";
 
@@ -9,7 +9,7 @@ const LocationPickerBottomSheet = React.forwardRef(
   ({ initialLocation, onConfirm }, ref) => {
     const [location, setLocation] = useState(initialLocation || null);
     const theme = useTheme();
-
+    const snapPoints = useMemo(() => ["70%"]);
     const handlePlaceSelected = (data, details) => {
       console.log("LocationPickerBottomSheet - handlePlaceSelected:", {
         data,
@@ -49,35 +49,27 @@ const LocationPickerBottomSheet = React.forwardRef(
     return (
       <BottomSheetModal
         ref={ref}
-        snapPoints={["50%", "80%"]}
+        snapPoints={snapPoints}
         title="Pick a Location"
         showConfirm={true}
         confirmText="Set Location"
         onConfirm={handleConfirm}
-        enablePanDownToClose={false}
-        keyboardBehavior="interactive"
-        keyboardBlurBehavior="restore"
+        keyboardBehavior="extend"
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ flex: 1 }}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
-        >
-          <GooglePlacesInput onPlaceSelected={handlePlaceSelected} />
-          {location && (
-            <MapView
-              style={styles.map}
-              region={{
-                latitude: location.latitude,
-                longitude: location.longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }}
-            >
-              <Marker coordinate={location} />
-            </MapView>
-          )}
-        </KeyboardAvoidingView>
+        <GooglePlacesInput onPlaceSelected={handlePlaceSelected} />
+        {location && (
+          <MapView
+            style={styles.map}
+            region={{
+              latitude: location.latitude,
+              longitude: location.longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }}
+          >
+            <Marker coordinate={location} />
+          </MapView>
+        )}
       </BottomSheetModal>
     );
   }
