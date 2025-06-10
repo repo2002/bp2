@@ -1,7 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 const CACHE_KEY_PREFIX = "event_qna_";
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
@@ -9,9 +9,7 @@ const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 export function useEventQnA(eventId) {
   const { user } = useAuth();
   const [questions, setQuestions] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [posting, setPosting] = useState(false);
   const [upvoted, setUpvoted] = useState({}); // { [questionId]: true }
 
   // Load from cache
@@ -24,8 +22,6 @@ export function useEventQnA(eventId) {
         const { data, timestamp } = JSON.parse(cached);
         if (Date.now() - timestamp < CACHE_EXPIRY) {
           setQuestions(data);
-          setLoading(false);
-
           return true;
         }
       }
@@ -48,46 +44,49 @@ export function useEventQnA(eventId) {
     }
   };
 
-  // Fetch questions and answers
-  const fetchQnA = useCallback(
-    async (refresh = false) => {
-      setLoading(true);
-      setError(null);
+  // Initial data fetch
+  useEffect(() => {
+    if (!eventId) return;
+
+    const fetchInitialData = async () => {
       try {
-        if (!refresh && (await loadCachedData())) return;
-        const {
-          data,
-          error: err,
-          count,
-        } = await supabase
+        if (await loadCachedData()) return;
+
+        const { data, error: err } = await supabase
           .from("event_questions")
           .select(
-            `*, user:profiles!event_questions_user_id_fkey(*), answers:event_answers(*, user:profiles!event_answers_user_id_fkey(*))`,
-            { count: "exact" }
+            `*, 
+            user:profiles!event_questions_user_id_fkey(*), 
+            answers:event_answers(*, user:profiles!event_answers_user_id_fkey(*)),
+            upvotes:event_question_upvotes(user_id)`
           )
           .eq("event_id", eventId)
           .order("created_at", { ascending: false });
+
         if (err) throw err;
-        setQuestions(data || []);
-        await cacheData(data);
-        // Load upvoted state from localStorage
+
+        // Process upvotes
+        const processedData = data.map((q) => ({
+          ...q,
+          upvotes: q.upvotes?.length || 0,
+          hasUpvoted: q.upvotes?.some((u) => u.user_id === user?.id) || false,
+        }));
+
+        setQuestions(processedData);
+        await cacheData(processedData);
+
+        // Load upvoted state
         const upvotedRaw = await AsyncStorage.getItem(
           `event_qna_upvoted_${user?.id}_${eventId}`
         );
         setUpvoted(upvotedRaw ? JSON.parse(upvotedRaw) : {});
       } catch (err) {
         setError(err.message);
-        throw err;
-      } finally {
-        setLoading(false);
       }
-    },
-    [eventId, user?.id]
-  );
+    };
 
-  useEffect(() => {
-    if (eventId) fetchQnA();
-  }, [eventId, fetchQnA]);
+    fetchInitialData();
+  }, [eventId, user?.id]);
 
   // Real-time subscription
   useEffect(() => {
@@ -103,8 +102,40 @@ export function useEventQnA(eventId) {
           table: "event_questions",
           filter: `event_id=eq.${eventId}`,
         },
-        () => {
-          fetchQnA(true);
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            // Fetch the full question data with upvotes
+            supabase
+              .from("event_questions")
+              .select(
+                `*, 
+                user:profiles!event_questions_user_id_fkey(*), 
+                answers:event_answers(*, user:profiles!event_answers_user_id_fkey(*)),
+                upvotes:event_question_upvotes(user_id)`
+              )
+              .eq("id", payload.new.id)
+              .single()
+              .then(({ data }) => {
+                if (data) {
+                  const processedData = {
+                    ...data,
+                    upvotes: data.upvotes?.length || 0,
+                    hasUpvoted:
+                      data.upvotes?.some((u) => u.user_id === user?.id) ||
+                      false,
+                  };
+                  setQuestions((prev) => [processedData, ...prev]);
+                }
+              });
+          } else if (payload.eventType === "DELETE") {
+            setQuestions((prev) => prev.filter((q) => q.id !== payload.old.id));
+          } else if (payload.eventType === "UPDATE") {
+            setQuestions((prev) =>
+              prev.map((q) =>
+                q.id === payload.new.id ? { ...q, ...payload.new } : q
+              )
+            );
+          }
         }
       )
       .on(
@@ -115,64 +146,185 @@ export function useEventQnA(eventId) {
           table: "event_answers",
           filter: `event_id=eq.${eventId}`,
         },
-        () => {
-          fetchQnA(true);
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            // Fetch the full answer data
+            supabase
+              .from("event_answers")
+              .select(`*, user:profiles!event_answers_user_id_fkey(*)`)
+              .eq("id", payload.new.id)
+              .single()
+              .then(({ data }) => {
+                if (data) {
+                  setQuestions((prev) =>
+                    prev.map((q) => {
+                      if (q.id === data.question_id) {
+                        return {
+                          ...q,
+                          answers: [...(q.answers || []), data],
+                        };
+                      }
+                      return q;
+                    })
+                  );
+                }
+              });
+          } else if (payload.eventType === "DELETE") {
+            setQuestions((prev) =>
+              prev.map((q) => {
+                if (q.id === payload.old.question_id) {
+                  return {
+                    ...q,
+                    answers: (q.answers || []).filter(
+                      (a) => a.id !== payload.old.id
+                    ),
+                  };
+                }
+                return q;
+              })
+            );
+          } else if (payload.eventType === "UPDATE") {
+            setQuestions((prev) =>
+              prev.map((q) => {
+                if (q.id === payload.new.question_id) {
+                  return {
+                    ...q,
+                    answers: (q.answers || []).map((a) =>
+                      a.id === payload.new.id ? payload.new : a
+                    ),
+                  };
+                }
+                return q;
+              })
+            );
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "event_question_upvotes",
+          filter: `event_id=eq.${eventId}`,
+        },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setQuestions((prev) =>
+              prev.map((q) => {
+                if (q.id === payload.new.question_id) {
+                  return {
+                    ...q,
+                    upvotes: (q.upvotes || 0) + 1,
+                    hasUpvoted:
+                      payload.new.user_id === user?.id ? true : q.hasUpvoted,
+                  };
+                }
+                return q;
+              })
+            );
+          } else if (payload.eventType === "DELETE") {
+            setQuestions((prev) =>
+              prev.map((q) => {
+                if (q.id === payload.old.question_id) {
+                  return {
+                    ...q,
+                    upvotes: (q.upvotes || 0) - 1,
+                    hasUpvoted:
+                      payload.old.user_id === user?.id ? false : q.hasUpvoted,
+                  };
+                }
+                return q;
+              })
+            );
+          }
         }
       )
       .subscribe();
+
     return () => {
       channel.unsubscribe();
     };
-  }, [eventId, fetchQnA]);
+  }, [eventId, user?.id]);
 
   // Post a new question
   const postQuestion = async (question) => {
-    if (!question.trim()) return;
-    setPosting(true);
     try {
-      const { error: err, data } = await supabase
+      const { data, error: err } = await supabase
         .from("event_questions")
-        .insert({ event_id: eventId, user_id: user.id, question })
-        .select(`*, user:profiles!event_questions_user_id_fkey(*)`)
+        .insert({
+          event_id: eventId,
+          question,
+          user_id: user.id,
+        })
+        .select(
+          `
+          *,
+          user:profiles!event_questions_user_id_fkey(*)
+        `
+        )
         .single();
-      if (err) {
-        console.error("[useEventQnA] Error posting question:", err);
-        throw err;
-      }
-      console.log("[useEventQnA] Question posted successfully:", data);
-      console.log("[useEventQnA] fetchQnA called after postQuestion");
-      await fetchQnA(true);
+
+      if (err) throw err;
+
+      // Update state directly
+      setQuestions((prev) => [
+        {
+          ...data,
+          upvotes: 0,
+          hasUpvoted: false,
+          answers: [],
+        },
+        ...prev,
+      ]);
+      return data;
     } catch (err) {
       setError(err.message);
-      console.error("[useEventQnA] postQuestion error:", err);
       throw err;
-    } finally {
-      setPosting(false);
     }
   };
 
   // Post an answer
   const postAnswer = async (questionId, answer) => {
-    if (!answer.trim()) return;
-    setPosting(true);
     try {
-      const { error: err, data } = await supabase
+      const { data, error: err } = await supabase
         .from("event_answers")
-        .insert({ question_id: questionId, user_id: user.id, answer })
-        .select(`*, user:profiles!event_answers_user_id_fkey(*)`)
+        .insert({
+          question_id: questionId,
+          answer,
+          user_id: user.id,
+        })
+        .select(
+          `
+          *,
+          user:profiles!event_answers_user_id_fkey(*)
+        `
+        )
         .single();
+
       if (err) throw err;
-      console.log("[useEventQnA] fetchQnA called after postAnswer");
-      await fetchQnA(true);
+
+      // Update state directly
+      setQuestions((prev) =>
+        prev.map((q) => {
+          if (q.id === questionId) {
+            return {
+              ...q,
+              answers: [...(q.answers || []), data],
+            };
+          }
+          return q;
+        })
+      );
+
+      return data;
     } catch (err) {
       setError(err.message);
       throw err;
-    } finally {
-      setPosting(false);
     }
   };
 
-  // Upvote a question (toggle upvote)
+  // Upvote a question
   const upvoteQuestion = async (questionId) => {
     try {
       const { data: result, error: err } = await supabase.rpc(
@@ -202,33 +354,24 @@ export function useEventQnA(eventId) {
                 result.action === "added"
                   ? (q.upvotes || 0) + 1
                   : (q.upvotes || 0) - 1,
+              hasUpvoted: result.action === "added",
             };
           }
           return q;
         })
       );
-      console.log("[useEventQnA] fetchQnA called after upvoteQuestion");
-      await fetchQnA(true);
     } catch (err) {
       setError(err.message);
       throw err;
     }
   };
 
-  const refresh = () => {
-    console.log("[useEventQnA] Manual refresh triggered");
-    fetchQnA(true);
-  };
-
   return {
     questions,
-    loading,
     error,
-    posting,
     postQuestion,
     postAnswer,
     upvoteQuestion,
-    refresh,
     upvoted,
   };
 }

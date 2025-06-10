@@ -368,10 +368,15 @@ export const updateRSVP = async (eventId, status) => {
 };
 
 export const followEvent = async (eventId) => {
+  if (!eventId) {
+    throw new Error("Event ID is required");
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user?.id) throw new Error("You must be logged in to follow events.");
+
   try {
     // Check if already following
     const { data: existing, error: checkError } = await supabase
@@ -380,10 +385,12 @@ export const followEvent = async (eventId) => {
       .eq("event_id", eventId)
       .eq("user_id", user.id)
       .single();
+
     if (checkError && checkError.code !== "PGRST116") throw checkError;
     if (existing) {
       return existing;
     }
+
     // Not following, insert
     const { data, error } = await supabase
       .from("event_followers")

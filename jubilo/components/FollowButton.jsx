@@ -1,6 +1,7 @@
 import { useTheme } from "@/hooks/theme";
 import useFollowersSubscription from "@/hooks/useFollowersSubscription";
 import useFollowersSubscriptionAsFollower from "@/hooks/useFollowersSubscriptionAsFollower";
+import { followEvent, unfollowEvent } from "@/services/events";
 import {
   followUser,
   getFollowStatus,
@@ -101,17 +102,30 @@ const FollowButton = ({
     setLoading(true);
 
     try {
-      if (status === "following") {
-        await unfollowUser(userId);
-        setStatus("none");
-        onUnfollow?.();
+      if (isEvent) {
+        if (status === "following") {
+          await unfollowEvent(eventId);
+          setStatus("none");
+          onUnfollow?.();
+        } else {
+          await followEvent(eventId);
+          setStatus("following");
+          onFollow?.();
+        }
       } else {
-        await followUser(userId);
-        setStatus("following");
-        onFollow?.();
+        if (status === "following") {
+          await unfollowUser(userId);
+          setStatus("none");
+          onUnfollow?.();
+        } else {
+          await followUser(userId);
+          setStatus("following");
+          onFollow?.();
+        }
       }
     } catch (err) {
       console.error("Error handling follow:", err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 
 export function useEventParticipants(eventId) {
   const [participants, setParticipants] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({
     going: 0,
@@ -16,7 +15,6 @@ export function useEventParticipants(eventId) {
 
   const fetchParticipants = async () => {
     try {
-      setLoading(true);
       const { data, error: err } = await supabase
         .from("event_participants")
         .select(
@@ -34,8 +32,6 @@ export function useEventParticipants(eventId) {
       updateStats(data);
     } catch (err) {
       setError(err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -69,8 +65,25 @@ export function useEventParticipants(eventId) {
             table: "event_participants",
             filter: `event_id=eq.${eventId}`,
           },
-          () => {
-            fetchParticipants();
+          (payload) => {
+            if (payload.eventType === "INSERT") {
+              setParticipants((prev) => [...prev, payload.new]);
+              updateStats([...participants, payload.new]);
+            } else if (payload.eventType === "DELETE") {
+              setParticipants((prev) =>
+                prev.filter((p) => p.id !== payload.old.id)
+              );
+              updateStats(participants.filter((p) => p.id !== payload.old.id));
+            } else if (payload.eventType === "UPDATE") {
+              setParticipants((prev) =>
+                prev.map((p) => (p.id === payload.new.id ? payload.new : p))
+              );
+              updateStats(
+                participants.map((p) =>
+                  p.id === payload.new.id ? payload.new : p
+                )
+              );
+            }
           }
         )
         .subscribe();
@@ -91,7 +104,29 @@ export function useEventParticipants(eventId) {
 
       if (err) throw err;
 
-      await fetchParticipants();
+      // Update local state directly
+      const existingParticipant = participants.find(
+        (p) => p.user_id === user.id
+      );
+      if (existingParticipant) {
+        setParticipants((prev) =>
+          prev.map((p) => (p.user_id === user.id ? { ...p, status } : p))
+        );
+        updateStats(
+          participants.map((p) =>
+            p.user_id === user.id ? { ...p, status } : p
+          )
+        );
+      } else {
+        const newParticipant = {
+          event_id: eventId,
+          user_id: user.id,
+          status,
+          user: user,
+        };
+        setParticipants((prev) => [...prev, newParticipant]);
+        updateStats([...participants, newParticipant]);
+      }
     } catch (err) {
       setError(err.message);
       throw err;
@@ -108,7 +143,9 @@ export function useEventParticipants(eventId) {
 
       if (err) throw err;
 
-      await fetchParticipants();
+      // Update local state directly
+      setParticipants((prev) => prev.filter((p) => p.user_id !== userId));
+      updateStats(participants.filter((p) => p.user_id !== userId));
     } catch (err) {
       setError(err.message);
       throw err;
@@ -130,7 +167,6 @@ export function useEventParticipants(eventId) {
 
   return {
     participants,
-    loading,
     error,
     stats,
     updateStatus,

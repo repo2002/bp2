@@ -86,14 +86,14 @@ export default function EventDetailsScreen() {
     setActionLoading(true);
     try {
       await joinEvent("going");
-      await refreshEvent();
-      await refreshParticipants();
+      // No need to refresh event or participants as they're handled by real-time updates
     } catch (e) {
       Alert.alert("Error", e.message || "Failed to join event");
     } finally {
       setActionLoading(false);
     }
   };
+
   const handleLeave = async () => {
     Alert.alert("Leave Event", "Are you sure you want to leave this event?", [
       { text: "Cancel", style: "cancel" },
@@ -104,8 +104,7 @@ export default function EventDetailsScreen() {
           setActionLoading(true);
           try {
             await leaveEvent();
-            await refreshEvent();
-            await refreshParticipants();
+            // No need to refresh event or participants as they're handled by real-time updates
           } catch (e) {
             Alert.alert("Error", e.message || "Failed to leave event");
           } finally {
