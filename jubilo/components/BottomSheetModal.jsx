@@ -13,13 +13,7 @@ import {
   useMemo,
   useRef,
 } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 
 const BottomSheetModal = forwardRef(
   (
@@ -108,29 +102,21 @@ const BottomSheetModal = forwardRef(
             <ThemeText style={[styles.title, { color: theme.colors.text }]}>
               {title}
             </ThemeText>
-            {/* <TouchableOpacity onPress={handleClose}>
-              <Ionicons name="close" size={24} color={theme.colors.text} />
-            </TouchableOpacity> */}
           </View>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={{ flex: 1 }}
-          >
-            {children}
-            {showConfirm && (
-              <TouchableOpacity
-                style={[
-                  styles.confirmButton,
-                  { backgroundColor: theme.colors.primary },
-                ]}
-                onPress={handleConfirm}
-              >
-                <ThemeText style={{ color: "#fff", fontWeight: "bold" }}>
-                  {confirmText}
-                </ThemeText>
-              </TouchableOpacity>
-            )}
-          </KeyboardAvoidingView>
+          {children}
+          {showConfirm && (
+            <TouchableOpacity
+              style={[
+                styles.confirmButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              onPress={handleConfirm}
+            >
+              <ThemeText style={{ color: "#fff", fontWeight: "bold" }}>
+                {confirmText}
+              </ThemeText>
+            </TouchableOpacity>
+          )}
         </BottomSheetView>
       </BottomSheet>
     );

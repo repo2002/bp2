@@ -84,10 +84,23 @@ export default function EventDetailsScreen() {
 
     setRefreshing(true);
     try {
-      // Start all refreshes in parallel
-      await Promise.all([refreshEvent(), refreshParticipants(), refreshQnA()]);
+      // Start all refreshes in parallel but handle errors individually
+      const results = await Promise.allSettled([
+        refreshEvent(),
+        refreshParticipants(),
+        refreshQnA(),
+      ]);
+
+      // Check for errors
+      results.forEach((result, index) => {
+        if (result.status === "rejected" && mountedRef.current) {
+          console.error(`Refresh ${index} failed:`, result.reason);
+        }
+      });
     } catch (error) {
-      console.error("Error during refresh:", error);
+      if (mountedRef.current) {
+        console.error("Error during refresh:", error);
+      }
     } finally {
       // Add a small delay before ending the refresh to prevent the warning
       refreshTimeoutRef.current = setTimeout(() => {
@@ -116,14 +129,13 @@ export default function EventDetailsScreen() {
     }
   }, [event, navigation]);
 
-  // Join/Leave handlers
+  // Join/Leave handlers with better error handling
   const handleJoin = async () => {
     if (!mountedRef.current) return;
 
     setActionLoading(true);
     try {
       await joinEvent("going");
-      // No need to refresh event or participants as they're handled by real-time updates
     } catch (e) {
       if (!mountedRef.current) return;
       Alert.alert("Error", e.message || "Failed to join event");
@@ -148,7 +160,6 @@ export default function EventDetailsScreen() {
           setActionLoading(true);
           try {
             await leaveEvent();
-            // No need to refresh event or participants as they're handled by real-time updates
           } catch (e) {
             if (!mountedRef.current) return;
             Alert.alert("Error", e.message || "Failed to leave event");
@@ -239,7 +250,7 @@ export default function EventDetailsScreen() {
   return (
     <>
       <ScrollView
-        style={{ flex: 1, backgroundColor: theme.colors.background }}
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

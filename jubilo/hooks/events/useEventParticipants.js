@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function useEventParticipants(eventId) {
   const [participants, setParticipants] = useState([]);
@@ -12,9 +12,33 @@ export function useEventParticipants(eventId) {
     total: 0,
   });
   const { user } = useAuth();
+  const mountedRef = useRef(true);
+  const abortControllerRef = useRef(null);
+  const imageLoadTimeoutRef = useRef(null);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (imageLoadTimeoutRef.current) {
+        clearTimeout(imageLoadTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const fetchParticipants = async () => {
+    if (!eventId || !mountedRef.current) return;
+
     try {
+      // Only abort if there's an existing request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
+
       const { data, error: err } = await supabase
         .from("event_participants")
         .select(
@@ -24,19 +48,42 @@ export function useEventParticipants(eventId) {
         `
         )
         .eq("event_id", eventId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: true })
+        .abortSignal(abortControllerRef.current.signal);
 
       if (err) throw err;
 
-      setParticipants(data);
-      updateStats(data);
+      if (mountedRef.current) {
+        // Process user images with a delay to prevent too many simultaneous requests
+        const processedData = await Promise.all(
+          data.map(async (participant) => {
+            if (participant.user?.image_url) {
+              // Add a small delay between image loads
+              await new Promise((resolve) => {
+                imageLoadTimeoutRef.current = setTimeout(resolve, 100);
+              });
+            }
+            return participant;
+          })
+        );
+
+        setParticipants(processedData);
+        updateStats(processedData);
+      }
     } catch (err) {
-      setError(err.message);
+      if (err.name === "AbortError") return;
+      if (mountedRef.current) {
+        setError(err.message);
+      }
+    } finally {
+      abortControllerRef.current = null;
     }
   };
 
   const updateStats = (data) => {
-    const stats = {
+    if (!mountedRef.current) return;
+
+    const newStats = {
       going: 0,
       maybe: 0,
       notGoing: 0,
@@ -44,57 +91,60 @@ export function useEventParticipants(eventId) {
     };
 
     data.forEach((participant) => {
-      stats[participant.status]++;
+      newStats[participant.status]++;
     });
 
-    setStats(stats);
+    setStats(newStats);
   };
 
   useEffect(() => {
-    if (eventId) {
-      fetchParticipants();
+    if (!eventId || !mountedRef.current) return;
 
-      // Subscribe to participant changes
-      const subscription = supabase
-        .channel(`event_participants:${eventId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "event_participants",
-            filter: `event_id=eq.${eventId}`,
-          },
-          (payload) => {
+    fetchParticipants();
+
+    // Subscribe to participant changes
+    const channel = supabase
+      .channel(`event-${eventId}-participants`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "event_participants",
+          filter: `event_id=eq.${eventId}`,
+        },
+        (payload) => {
+          if (!mountedRef.current) return;
+
+          setParticipants((prev) => {
+            let newParticipants;
             if (payload.eventType === "INSERT") {
-              setParticipants((prev) => [...prev, payload.new]);
-              updateStats([...participants, payload.new]);
+              newParticipants = [...prev, payload.new];
             } else if (payload.eventType === "DELETE") {
-              setParticipants((prev) =>
-                prev.filter((p) => p.id !== payload.old.id)
-              );
-              updateStats(participants.filter((p) => p.id !== payload.old.id));
+              newParticipants = prev.filter((p) => p.id !== payload.old.id);
             } else if (payload.eventType === "UPDATE") {
-              setParticipants((prev) =>
-                prev.map((p) => (p.id === payload.new.id ? payload.new : p))
-              );
-              updateStats(
-                participants.map((p) =>
-                  p.id === payload.new.id ? payload.new : p
-                )
+              newParticipants = prev.map((p) =>
+                p.id === payload.new.id ? payload.new : p
               );
             }
-          }
-        )
-        .subscribe();
+            // Update stats with new participants list
+            updateStats(newParticipants);
+            return newParticipants;
+          });
+        }
+      )
+      .subscribe();
 
-      return () => {
-        subscription.unsubscribe();
-      };
-    }
+    return () => {
+      if (mountedRef.current) {
+        channel.unsubscribe();
+      }
+    };
   }, [eventId]);
 
   const updateStatus = async (status) => {
+    if (!eventId || !mountedRef.current) return;
+
     try {
       const { error: err } = await supabase.from("event_participants").upsert({
         event_id: eventId,
@@ -105,35 +155,40 @@ export function useEventParticipants(eventId) {
       if (err) throw err;
 
       // Update local state directly
-      const existingParticipant = participants.find(
-        (p) => p.user_id === user.id
-      );
-      if (existingParticipant) {
-        setParticipants((prev) =>
-          prev.map((p) => (p.user_id === user.id ? { ...p, status } : p))
-        );
-        updateStats(
-          participants.map((p) =>
+      setParticipants((prev) => {
+        const existingParticipant = prev.find((p) => p.user_id === user.id);
+        let newParticipants;
+
+        if (existingParticipant) {
+          newParticipants = prev.map((p) =>
             p.user_id === user.id ? { ...p, status } : p
-          )
-        );
-      } else {
-        const newParticipant = {
-          event_id: eventId,
-          user_id: user.id,
-          status,
-          user: user,
-        };
-        setParticipants((prev) => [...prev, newParticipant]);
-        updateStats([...participants, newParticipant]);
-      }
+          );
+        } else {
+          newParticipants = [
+            ...prev,
+            {
+              event_id: eventId,
+              user_id: user.id,
+              status,
+              user: user,
+            },
+          ];
+        }
+
+        updateStats(newParticipants);
+        return newParticipants;
+      });
     } catch (err) {
-      setError(err.message);
+      if (mountedRef.current) {
+        setError(err.message);
+      }
       throw err;
     }
   };
 
   const removeParticipant = async (userId) => {
+    if (!eventId || !mountedRef.current) return;
+
     try {
       const { error: err } = await supabase
         .from("event_participants")
@@ -144,10 +199,15 @@ export function useEventParticipants(eventId) {
       if (err) throw err;
 
       // Update local state directly
-      setParticipants((prev) => prev.filter((p) => p.user_id !== userId));
-      updateStats(participants.filter((p) => p.user_id !== userId));
+      setParticipants((prev) => {
+        const newParticipants = prev.filter((p) => p.user_id !== userId);
+        updateStats(newParticipants);
+        return newParticipants;
+      });
     } catch (err) {
-      setError(err.message);
+      if (mountedRef.current) {
+        setError(err.message);
+      }
       throw err;
     }
   };

@@ -1,29 +1,27 @@
-import ThemeText from "@/components/theme/ThemeText";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBottomSheet } from "@/contexts/BottomSheetContext";
 import { useTheme } from "@/hooks/theme";
-import { addComment, deleteComment, getComments } from "@/services/postService";
+import { addComment, deleteComment } from "@/services/postService";
 import { Ionicons } from "@expo/vector-icons";
+import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import Avatar from "./Avatar";
 import BottomSheetModal from "./BottomSheetModal";
 import EmptyState from "./EmptyState";
 import ErrorMessage from "./ErrorMessage";
 import LoadingIndicator from "./LoadingIndicator";
-import UserChip from "./UserChip";
+import ThemeText from "./theme/ThemeText";
 
 const CommentBottomSheet = forwardRef(({ post, highlightCommentId }, ref) => {
   const theme = useTheme();
-  const snapPoints = useMemo(() => ["80%"], []);
+  const snapPoints = useMemo(() => ["85%"]);
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [input, setInput] = useState("");
@@ -32,10 +30,14 @@ const CommentBottomSheet = forwardRef(({ post, highlightCommentId }, ref) => {
   const { selectedPost, commentSheetRef } = useBottomSheet();
   const [errorMsg, setErrorMsg] = useState(null);
   const flatListRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
-    if (selectedPost?.id) fetchComments();
-  }, [selectedPost?.id]);
+    if (selectedPost?.id) {
+      // Use the comments from the post prop
+      setComments(selectedPost.comments || []);
+    }
+  }, [selectedPost?.id, selectedPost?.comments]);
 
   useEffect(() => {
     if (highlightCommentId && comments.length > 0) {
@@ -48,31 +50,24 @@ const CommentBottomSheet = forwardRef(({ post, highlightCommentId }, ref) => {
     }
   }, [highlightCommentId, comments]);
 
-  const fetchComments = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    const { data, error } = await getComments(selectedPost.id, {
-      order: "asc",
-    });
-    if (error) setErrorMsg(error.message || "Failed to load comments.");
-    setComments(data || []);
-    setLoading(false);
-  };
-
   const handleSubmit = async () => {
     if (!input.trim() || submitting) return;
     setSubmitting(true);
     setErrorMsg(null);
-    const { error } = await addComment(
-      selectedPost.id,
-      selectedPost.user_id,
-      user.id,
-      input.trim()
-    );
-    if (error) setErrorMsg(error.message || "Failed to add comment.");
-    setInput("");
-    await fetchComments();
-    setSubmitting(false);
+    try {
+      const { error } = await addComment(
+        selectedPost.id,
+        selectedPost.user_id,
+        user.id,
+        input.trim()
+      );
+      if (error) throw error;
+      setInput("");
+    } catch (error) {
+      setErrorMsg(error.message || "Failed to add comment.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDeleteComment = async (commentId) => {
@@ -83,10 +78,13 @@ const CommentBottomSheet = forwardRef(({ post, highlightCommentId }, ref) => {
         style: "destructive",
         onPress: async () => {
           await deleteComment(commentId);
-          await fetchComments();
         },
       },
     ]);
+  };
+
+  const handleClose = () => {
+    // Implement the close logic
   };
 
   return (
@@ -94,6 +92,7 @@ const CommentBottomSheet = forwardRef(({ post, highlightCommentId }, ref) => {
       ref={commentSheetRef}
       snapPoints={snapPoints}
       title="Comments"
+      keyboardBehavior="extend"
     >
       <View style={styles.sheetContent}>
         {/* PostCard at the top */}
@@ -101,18 +100,20 @@ const CommentBottomSheet = forwardRef(({ post, highlightCommentId }, ref) => {
         {/* Comments list */}
         <ErrorMessage error={errorMsg} />
         <FlatList
+          ref={flatListRef}
           data={comments}
           keyExtractor={(item) => item.id}
-          style={{ flex: 1, marginBottom: 8 }}
+          style={{ marginBottom: 8 }}
           contentContainerStyle={{ paddingBottom: 8 }}
           renderItem={({ item }) => (
             <View
               style={[
                 styles.commentRow,
                 {
-                  backgroundColor: theme.colors.cardBackground,
-                  padding: 16,
-                  borderRadius: 10,
+                  justifyContent: "space-between",
+                  borderBottomWidth: 0.3,
+                  paddingBottom: 8,
+                  borderColor: theme.colors.text,
                 },
                 item.id === highlightCommentId && {
                   backgroundColor: "#ffe082",
@@ -120,21 +121,52 @@ const CommentBottomSheet = forwardRef(({ post, highlightCommentId }, ref) => {
                 },
               ]}
             >
-              <UserChip user={item.user} size={40} style={{ flex: 1 }}>
-                <ThemeText style={{ fontSize: 14 }}>{item.content}</ThemeText>
-              </UserChip>
-              {user?.id === item.user?.id && (
-                <TouchableOpacity
-                  onPress={() => handleDeleteComment(item.id)}
-                  style={{ marginLeft: 8 }}
-                >
-                  <Ionicons
-                    name="trash-outline"
-                    size={20}
-                    color={theme.colors.error}
-                  />
-                </TouchableOpacity>
-              )}
+              <View style={{ flexDirection: "row", gap: 8, flex: 1 }}>
+                <Avatar uri={item.user?.image_url} size={40} />
+                <View style={{ flexDirection: "column", gap: 4, flex: 1 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <ThemeText style={{ fontSize: 12, paddingVertical: 4 }}>
+                      {item.user?.username}
+                    </ThemeText>
+                    {user?.id === item.user?.id && (
+                      <TouchableOpacity
+                        onPress={() => handleDeleteComment(item.id)}
+                        style={{
+                          marginLeft: 8,
+                          alignSelf: "flex-start",
+                          backgroundColor: theme.colors.error + "20",
+                          paddingVertical: 4,
+                          paddingHorizontal: 8,
+                          borderRadius: 4,
+                        }}
+                      >
+                        <ThemeText
+                          color={theme.colors.error}
+                          style={{ fontSize: 12 }}
+                        >
+                          Delete
+                        </ThemeText>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <ThemeText
+                    style={{
+                      fontSize: 14,
+                      flexWrap: "wrap",
+                      flexShrink: 1,
+                    }}
+                    numberOfLines={null}
+                  >
+                    {item.content}
+                  </ThemeText>
+                </View>
+              </View>
             </View>
           )}
           ListEmptyComponent={
@@ -144,40 +176,45 @@ const CommentBottomSheet = forwardRef(({ post, highlightCommentId }, ref) => {
               <EmptyState message="No comments yet." />
             )
           }
-          ref={flatListRef}
         />
         {/* Input at the bottom */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={24}
-        >
-          <View style={styles.inputRow}>
-            <TextInput
-              value={input}
-              onChangeText={setInput}
-              placeholder="Add a comment..."
-              placeholderTextColor={theme.colors.grey}
-              style={[
-                styles.input,
-                {
-                  color: theme.colors.text,
-                  backgroundColor: theme.colors.cardBackground,
-                  padding: 16,
-                  borderRadius: 10,
-                },
-              ]}
-              editable={!submitting}
-              returnKeyType="send"
-              onSubmitEditing={handleSubmit}
+        <View style={styles.inputContainer}>
+          <BottomSheetTextInput
+            ref={inputRef}
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.colors.cardBackground,
+                color: theme.colors.text,
+                borderColor: theme.colors.border,
+              },
+            ]}
+            placeholder="Add a comment..."
+            placeholderTextColor={theme.colors.grey}
+            value={input}
+            onChangeText={setInput}
+            multiline
+            maxLength={500}
+          />
+          <TouchableOpacity
+            onPress={handleSubmit}
+            disabled={submitting || !input.trim()}
+            style={[
+              styles.sendButton,
+              {
+                backgroundColor: input.trim()
+                  ? theme.colors.primary
+                  : theme.colors.greyLight,
+              },
+            ]}
+          >
+            <Ionicons
+              name="send"
+              size={20}
+              color={input.trim() ? "#fff" : theme.colors.grey}
             />
-            <TouchableOpacity
-              onPress={handleSubmit}
-              disabled={submitting || !input.trim()}
-            >
-              <Ionicons name="send" size={24} color={theme.colors.primary} />
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
+          </TouchableOpacity>
+        </View>
       </View>
     </BottomSheetModal>
   );
@@ -186,8 +223,6 @@ const CommentBottomSheet = forwardRef(({ post, highlightCommentId }, ref) => {
 const styles = StyleSheet.create({
   sheetContent: {
     flex: 1,
-    padding: 0,
-    gap: 0,
   },
   commentRow: {
     flexDirection: "row",
@@ -199,11 +234,17 @@ const styles = StyleSheet.create({
     padding: 8,
     flex: 1,
   },
-  inputRow: {
+  inputContainer: {
     flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: 0.5,
 
-    gap: 8,
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   input: {
     flex: 1,
@@ -212,6 +253,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     marginRight: 8,
+  },
+  sendButton: {
+    padding: 8,
+    borderRadius: 20,
   },
 });
 

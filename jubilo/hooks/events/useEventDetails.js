@@ -113,200 +113,143 @@ export function useEventDetails(eventId) {
     }
   }, [eventId, user?.id]);
 
-  // Setup real-time subscriptions with proper cleanup
+  // Set up real-time subscriptions
   useEffect(() => {
     if (!eventId || !mountedRef.current) return;
 
-    const setupSubscriptions = async () => {
-      try {
-        // Event updates subscription
-        const eventSubscription = supabase
-          .channel(`event-${eventId}`)
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "events",
-              filter: `id=eq.${eventId}`,
-            },
-            async (payload) => {
-              if (!mountedRef.current) return;
-
-              try {
-                const eventData = await getEventDetails(eventId);
-                if (mountedRef.current) {
-                  setEvent(eventData);
-                  await cacheData(eventData);
-                }
-              } catch (err) {
-                console.error("Error updating event:", err);
-              }
-            }
-          )
-          .subscribe();
-
-        subscriptionsRef.current.push(eventSubscription);
-
-        // Participants subscription
-        const participantsSubscription = supabase
-          .channel(`event-participants-${eventId}`)
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "event_participants",
-              filter: `event_id=eq.${eventId}`,
-            },
-            async () => {
-              if (!mountedRef.current) return;
-
-              try {
-                const eventData = await getEventDetails(eventId);
-                if (mountedRef.current) {
-                  setEvent(eventData);
-                  await cacheData(eventData);
-                }
-              } catch (err) {
-                console.error("Error updating participants:", err);
-              }
-            }
-          )
-          .subscribe();
-
-        subscriptionsRef.current.push(participantsSubscription);
-
-        // Invitations subscription
-        const invitationsSubscription = supabase
-          .channel(`event-invitations-${eventId}`)
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "event_invitations",
-              filter: `event_id=eq.${eventId}`,
-            },
-            async () => {
-              if (!mountedRef.current) return;
-
-              try {
-                const eventData = await getEventDetails(eventId);
-                if (mountedRef.current) {
-                  setEvent(eventData);
-                  await cacheData(eventData);
-                }
-              } catch (err) {
-                console.error("Error updating invitations:", err);
-              }
-            }
-          )
-          .subscribe();
-
-        subscriptionsRef.current.push(invitationsSubscription);
-
-        // Images subscription
-        const imagesSubscription = supabase
-          .channel(`event-images-${eventId}`)
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "event_images",
-              filter: `event_id=eq.${eventId}`,
-            },
-            async () => {
-              if (!mountedRef.current) return;
-
-              try {
-                const eventData = await getEventDetails(eventId);
-                if (mountedRef.current) {
-                  setEvent(eventData);
-                  await cacheData(eventData);
-                }
-              } catch (err) {
-                console.error("Error updating images:", err);
-              }
-            }
-          )
-          .subscribe();
-
-        subscriptionsRef.current.push(imagesSubscription);
-
-        // Questions subscription
-        const questionsSubscription = supabase
-          .channel(`event-questions-${eventId}`)
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "event_questions",
-              filter: `event_id=eq.${eventId}`,
-            },
-            async () => {
-              if (!mountedRef.current) return;
-
-              try {
-                const eventData = await getEventDetails(eventId);
-                if (mountedRef.current) {
-                  setEvent(eventData);
-                  await cacheData(eventData);
-                }
-              } catch (err) {
-                console.error("Error updating questions:", err);
-              }
-            }
-          )
-          .subscribe();
-
-        subscriptionsRef.current.push(questionsSubscription);
-
-        // Answers subscription (only if we have questions)
-        if (event?.questions?.length > 0) {
-          const answersSubscription = supabase
-            .channel(`event-answers-${eventId}`)
-            .on(
-              "postgres_changes",
-              {
-                event: "*",
-                schema: "public",
-                table: "event_answers",
-                filter: `question_id=in.(${event.questions
-                  .map((q) => q.id)
-                  .join(",")})`,
-              },
-              async () => {
-                if (!mountedRef.current) return;
-
-                try {
-                  const eventData = await getEventDetails(eventId);
-                  if (mountedRef.current) {
-                    setEvent(eventData);
-                    await cacheData(eventData);
-                  }
-                } catch (err) {
-                  console.error("Error updating answers:", err);
-                }
-              }
-            )
-            .subscribe();
-
-          subscriptionsRef.current.push(answersSubscription);
+    // Single channel for all event-related updates
+    const channel = supabase
+      .channel(`event-${eventId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "events",
+          filter: `id=eq.${eventId}`,
+        },
+        (payload) => {
+          if (!mountedRef.current) return;
+          console.log("Event update:", payload);
+          setEvent((prev) => ({ ...prev, ...payload.new }));
         }
-      } catch (err) {
-        console.error("Error setting up subscriptions:", err);
-      }
-    };
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "event_participants",
+          filter: `event_id=eq.${eventId}`,
+        },
+        (payload) => {
+          if (!mountedRef.current) return;
+          console.log("Participant update:", payload);
+          // Handle participant updates
+          if (payload.eventType === "INSERT") {
+            setEvent((prev) => ({
+              ...prev,
+              participants: [...(prev.participants || []), payload.new],
+            }));
+          } else if (payload.eventType === "DELETE") {
+            setEvent((prev) => ({
+              ...prev,
+              participants: (prev.participants || []).filter(
+                (p) => p.id !== payload.old.id
+              ),
+            }));
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "event_invitations",
+          filter: `event_id=eq.${eventId}`,
+        },
+        (payload) => {
+          if (!mountedRef.current) return;
+          console.log("Invitation update:", payload);
+          // Handle invitation updates
+          if (payload.eventType === "INSERT") {
+            setEvent((prev) => ({
+              ...prev,
+              invitations: [...(prev.invitations || []), payload.new],
+            }));
+          } else if (payload.eventType === "DELETE") {
+            setEvent((prev) => ({
+              ...prev,
+              invitations: (prev.invitations || []).filter(
+                (i) => i.id !== payload.old.id
+              ),
+            }));
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "event_images",
+          filter: `event_id=eq.${eventId}`,
+        },
+        (payload) => {
+          if (!mountedRef.current) return;
+          console.log("Image update:", payload);
 
-    setupSubscriptions();
+          // Handle image updates with proper state management
+          setEvent((prev) => {
+            const currentImages = prev.images || [];
+
+            if (payload.eventType === "INSERT") {
+              // Check if image already exists to prevent duplicates
+              if (currentImages.some((img) => img.id === payload.new.id)) {
+                return prev;
+              }
+
+              // Add new image and sort by created_at
+              const newImages = [...currentImages, payload.new].sort(
+                (a, b) => new Date(b.created_at) - new Date(a.created_at)
+              );
+
+              return {
+                ...prev,
+                images: newImages,
+              };
+            } else if (payload.eventType === "DELETE") {
+              return {
+                ...prev,
+                images: currentImages.filter(
+                  (img) => img.id !== payload.old.id
+                ),
+              };
+            } else if (payload.eventType === "UPDATE") {
+              return {
+                ...prev,
+                images: currentImages.map((img) =>
+                  img.id === payload.new.id ? payload.new : img
+                ),
+              };
+            }
+
+            return prev;
+          });
+        }
+      )
+      .subscribe();
+
+    // Initial fetch
+    fetchEventDetails();
 
     return () => {
-      // Cleanup will be handled by the main cleanup effect
+      if (mountedRef.current) {
+        channel.unsubscribe();
+      }
     };
-  }, [eventId, event?.questions]);
+  }, [eventId, fetchEventDetails]);
 
   // Initial data load
   useEffect(() => {

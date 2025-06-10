@@ -368,149 +368,85 @@ export function useEventQnA(eventId) {
   useEffect(() => {
     if (!eventId || !mountedRef.current) return;
 
-    // Cleanup previous subscriptions
-    subscriptionsRef.current.forEach((sub) => sub.unsubscribe());
-    subscriptionsRef.current = [];
-
-    // Subscribe to new questions
-    const questionsSubscription = supabase
-      .channel(`event_questions:${eventId}`)
+    // Single channel for all QnA updates
+    const channel = supabase
+      .channel(`event-qna-${eventId}`)
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "event_questions",
           filter: `event_id=eq.${eventId}`,
         },
         (payload) => {
           if (!mountedRef.current) return;
-          // Only add if not already in the list
-          setQuestions((prev) => {
-            if (prev.some((q) => q.id === payload.new.id)) return prev;
-            return [payload.new, ...prev];
-          });
+          console.log("Question update:", payload);
+
+          if (payload.eventType === "INSERT") {
+            setQuestions((prev) => [...prev, payload.new]);
+          } else if (payload.eventType === "DELETE") {
+            setQuestions((prev) => prev.filter((q) => q.id !== payload.old.id));
+          } else if (payload.eventType === "UPDATE") {
+            setQuestions((prev) =>
+              prev.map((q) => (q.id === payload.new.id ? payload.new : q))
+            );
+          }
         }
       )
-      .subscribe();
-    subscriptionsRef.current.push(questionsSubscription);
-
-    // Subscribe to question updates (including upvotes)
-    const questionUpdatesSubscription = supabase
-      .channel(`event_question_updates:${eventId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
-          schema: "public",
-          table: "event_questions",
-          filter: `event_id=eq.${eventId}`,
-        },
-        (payload) => {
-          setQuestions((prev) =>
-            prev.map((q) =>
-              q.id === payload.new.id ? { ...q, ...payload.new } : q
-            )
-          );
-        }
-      )
-      .subscribe();
-    subscriptionsRef.current.push(questionUpdatesSubscription);
-
-    // Subscribe to new answers
-    const answersSubscription = supabase
-      .channel(`event_answers:${eventId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
           schema: "public",
           table: "event_answers",
           filter: `question_id=in.(${questions.map((q) => q.id).join(",")})`,
         },
-        async (payload) => {
-          // Fetch the user details for the new answer
-          const { data: userData } = await supabase
-            .from("users")
-            .select("id, username, image_url")
-            .eq("id", payload.new.user_id)
-            .single();
+        (payload) => {
+          if (!mountedRef.current) return;
+          console.log("Answer update:", payload);
 
           setQuestions((prev) =>
-            prev.map((q) =>
-              q.id === payload.new.question_id
-                ? {
-                    ...q,
-                    answers: [
-                      {
-                        ...payload.new,
-                        user: userData,
-                      },
-                      ...(q.answers || []),
-                    ],
-                  }
-                : q
-            )
+            prev.map((question) => {
+              if (question.id === payload.new.question_id) {
+                const updatedAnswers = question.answers || [];
+                if (payload.eventType === "INSERT") {
+                  return {
+                    ...question,
+                    answers: [...updatedAnswers, payload.new],
+                  };
+                } else if (payload.eventType === "DELETE") {
+                  return {
+                    ...question,
+                    answers: updatedAnswers.filter(
+                      (a) => a.id !== payload.old.id
+                    ),
+                  };
+                } else if (payload.eventType === "UPDATE") {
+                  return {
+                    ...question,
+                    answers: updatedAnswers.map((a) =>
+                      a.id === payload.new.id ? payload.new : a
+                    ),
+                  };
+                }
+              }
+              return question;
+            })
           );
         }
       )
       .subscribe();
-    subscriptionsRef.current.push(answersSubscription);
-
-    // Subscribe to upvote changes
-    const upvotesSubscription = supabase
-      .channel(`event_question_upvotes:${eventId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "event_question_upvotes",
-          filter: `question_id=in.(${questions.map((q) => q.id).join(",")})`,
-        },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
-            setQuestions((prev) =>
-              prev.map((q) =>
-                q.id === payload.new.question_id
-                  ? { ...q, upvotes: (q.upvotes || 0) + 1 }
-                  : q
-              )
-            );
-            if (payload.new.user_id === user.id) {
-              setUpvoted((prev) => ({
-                ...prev,
-                [payload.new.question_id]: true,
-              }));
-            }
-          } else if (payload.eventType === "DELETE") {
-            setQuestions((prev) =>
-              prev.map((q) =>
-                q.id === payload.old.question_id
-                  ? { ...q, upvotes: Math.max(0, (q.upvotes || 0) - 1) }
-                  : q
-              )
-            );
-            if (payload.old.user_id === user.id) {
-              setUpvoted((prev) => ({
-                ...prev,
-                [payload.old.question_id]: false,
-              }));
-            }
-          }
-        }
-      )
-      .subscribe();
-    subscriptionsRef.current.push(upvotesSubscription);
 
     // Initial fetch
     fetchQuestions();
 
     return () => {
-      subscriptionsRef.current.forEach((sub) => sub.unsubscribe());
-      subscriptionsRef.current = [];
+      if (mountedRef.current) {
+        channel.unsubscribe();
+      }
     };
-  }, [eventId, user.id, questions, fetchQuestions]);
+  }, [eventId, questions, fetchQuestions]);
 
   return {
     questions,

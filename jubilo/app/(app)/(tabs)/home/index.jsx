@@ -38,40 +38,34 @@ export default function Home() {
   }, []);
 
   const setupRealtimeSubscriptions = () => {
-    // Subscribe to new posts
-    const postsSubscription = supabase
-      .channel("posts")
+    // Single channel for all feed updates
+    const feedSubscription = supabase
+      .channel("feed_updates")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "posts" },
+        { event: "*", schema: "public", table: "posts" },
         async (payload) => {
-          const newPost = payload.new;
-          // Only add the post if it's not private or if the user can view it
-          if (!newPost.is_private || canViewPost(newPost.user_id, true)) {
-            // Fetch the user data for the new post
-            const { data: userData } = await getUserData(newPost.user_id);
-            newPost.user = userData;
-            // Check if the post already exists in the array
-            setPosts((prev) => {
-              const postExists = prev.some((post) => post.id === newPost.id);
-              if (postExists) return prev;
-              return [newPost, ...prev];
-            });
+          if (payload.eventType === "INSERT") {
+            const newPost = payload.new;
+            // Only add the post if it's not private or if the user can view it
+            if (!newPost.is_private || canViewPost(newPost.user_id, true)) {
+              // Fetch the user data for the new post
+              const { data: userData } = await getUserData(newPost.user_id);
+              newPost.user = userData;
+              // Check if the post already exists in the array
+              setPosts((prev) => {
+                const postExists = prev.some((post) => post.id === newPost.id);
+                if (postExists) return prev;
+                return [newPost, ...prev];
+              });
+            }
+          } else if (payload.eventType === "DELETE") {
+            setPosts((prev) =>
+              prev.filter((post) => post.id !== payload.old.id)
+            );
           }
         }
       )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "posts" },
-        (payload) => {
-          setPosts((prev) => prev.filter((post) => post.id !== payload.old.id));
-        }
-      )
-      .subscribe();
-
-    // Subscribe to likes
-    const likesSubscription = supabase
-      .channel("post_likes")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "post_likes" },
@@ -88,7 +82,7 @@ export default function Home() {
                 return {
                   ...post,
                   likes: updatedLikes,
-                  like_count: updatedLikes.length, // Update the like count
+                  like_count: updatedLikes.length,
                 };
               }
               return post;
@@ -96,33 +90,53 @@ export default function Home() {
           );
         }
       )
-      .subscribe();
-
-    // Subscribe to comments
-    const commentsSubscription = supabase
-      .channel("comments")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "comments" },
         async (payload) => {
           if (payload.eventType === "INSERT") {
-            const { data: userData } = await getUserData(payload.new.user_id);
-            payload.new.user = userData;
+            // Get full user data for the new comment
+            const { data: userData } = await supabase
+              .from("profiles")
+              .select("id, username, image_url")
+              .eq("id", payload.new.user_id)
+              .single();
+
+            if (userData) {
+              payload.new.user = userData;
+            }
           }
 
           setPosts((prev) =>
             prev.map((post) => {
               if (post.id === payload.new.post_id) {
-                const updatedComments =
-                  payload.eventType === "INSERT"
-                    ? [...(post.comments || []), payload.new]
-                    : (post.comments || []).filter(
-                        (comment) => comment.id !== payload.old.id
-                      );
+                let updatedComments;
+
+                if (payload.eventType === "INSERT") {
+                  // For INSERT, check if we need to update the comment
+                  const existingCommentIndex = post.comments?.findIndex(
+                    (comment) => comment.id === payload.new.id
+                  );
+
+                  if (existingCommentIndex !== -1) {
+                    // Update existing comment if needed
+                    updatedComments = [...(post.comments || [])];
+                    updatedComments[existingCommentIndex] = payload.new;
+                  } else {
+                    // Add new comment
+                    updatedComments = [...(post.comments || []), payload.new];
+                  }
+                } else {
+                  // For DELETE, remove the comment
+                  updatedComments = (post.comments || []).filter(
+                    (comment) => comment.id !== payload.old.id
+                  );
+                }
+
                 return {
                   ...post,
                   comments: updatedComments,
-                  comment_count: updatedComments.length, // Update the comment count
+                  comment_count: updatedComments.length,
                 };
               }
               return post;
@@ -130,12 +144,12 @@ export default function Home() {
           );
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Feed subscription status:", status);
+      });
 
     return () => {
-      postsSubscription.unsubscribe();
-      likesSubscription.unsubscribe();
-      commentsSubscription.unsubscribe();
+      feedSubscription.unsubscribe();
     };
   };
 
