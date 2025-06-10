@@ -155,10 +155,9 @@ export default function CarpoolDetailsScreen() {
     }
     setIsCreatingChat(true);
     try {
-      const chatName = `Carpool: ${getShortContent(
-        carpool.description || "Carpool",
-        20
-      )}`;
+      const chatName = `Carpool: ${
+        carpool.title || getShortContent(carpool.description || "Carpool", 20)
+      }`;
       const participantIds = [
         carpool.driver_id,
         ...confirmedPassengers.map((p) => p.user_id),

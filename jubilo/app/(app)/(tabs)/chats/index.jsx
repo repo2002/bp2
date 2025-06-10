@@ -42,7 +42,7 @@ export default function ChatsIndex() {
 
     switch (message.type) {
       case "text":
-        return getShortContent(message.text, 30);
+        return getShortContent(message.text, 25);
       case "image":
         return "📷 Image";
       case "video":

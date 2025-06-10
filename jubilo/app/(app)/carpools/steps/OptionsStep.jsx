@@ -535,43 +535,42 @@ export default function OptionsStep({ form, setForm, onBack, onNext }) {
         </View>
       </Modal>
 
-      {/* Navigation Buttons */}
+      {/* Footer */}
       <View
         style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
           flexDirection: "row",
           justifyContent: "space-between",
           padding: 16,
           backgroundColor: theme.colors.background,
+          borderTopWidth: 1,
+          borderTopColor: theme.colors.grey,
         }}
       >
         <TouchableOpacity
           style={{
-            paddingVertical: 16,
-            paddingHorizontal: 32,
-            borderRadius: 10,
-            alignItems: "center",
-            backgroundColor: theme.colors.greyDark,
+            padding: 12,
+            borderRadius: 8,
+            backgroundColor: theme.colors.grey,
           }}
           onPress={onBack}
         >
-          <ThemeText color="black" style={{ fontWeight: "bold", fontSize: 16 }}>
-            Back
-          </ThemeText>
+          <ThemeText style={{ color: theme.colors.text }}>Back</ThemeText>
         </TouchableOpacity>
         <TouchableOpacity
           style={{
-            paddingVertical: 16,
-            paddingHorizontal: 32,
-            borderRadius: 10,
-            alignItems: "center",
+            padding: 12,
+            borderRadius: 8,
             backgroundColor: isValid ? theme.colors.primary : theme.colors.grey,
+            opacity: isValid ? 1 : 0.5,
           }}
-          onPress={isValid ? onNext : undefined}
+          onPress={onNext}
           disabled={!isValid}
         >
-          <ThemeText color="white" style={{ fontWeight: "bold", fontSize: 16 }}>
-            Next
-          </ThemeText>
+          <ThemeText style={{ color: "white" }}>Next</ThemeText>
         </TouchableOpacity>
       </View>
     </View>

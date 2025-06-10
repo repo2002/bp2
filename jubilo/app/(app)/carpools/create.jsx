@@ -31,6 +31,7 @@ const CreateCarpoolScreen = () => {
     price: "",
     cost: "",
     description: "",
+    title: "",
     is_private: false,
     is_recurring: false,
     recurrence_rule: "",
@@ -82,7 +83,8 @@ const CreateCarpoolScreen = () => {
     form.departure_location &&
     form.destination_location &&
     form.departure_time &&
-    form.max_seats > 0;
+    form.max_seats > 0 &&
+    form.title.trim() !== "";
 
   // Submit
   const handleSubmit = async () => {
@@ -104,6 +106,7 @@ const CreateCarpoolScreen = () => {
         price: form.price ? Number(form.price) : null,
         cost: form.cost ? Number(form.cost) : null,
         description: form.description,
+        title: form.title,
         is_private: form.is_private,
         is_recurring: form.is_recurring,
         recurrence_rule: form.is_recurring ? form.recurrence_rule : null,
@@ -179,6 +182,7 @@ const CreateCarpoolScreen = () => {
         <SeatsStep
           form={form}
           setForm={setForm}
+          selectedCar={selectedCar}
           onBack={() => setStepIndex((i) => i - 1)}
           onNext={() => setStepIndex((i) => i + 1)}
         />

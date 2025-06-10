@@ -9,9 +9,20 @@ import {
   View,
 } from "react-native";
 
-export default function SeatsStep({ form, setForm, onBack, onNext }) {
+export default function SeatsStep({
+  form,
+  setForm,
+  onBack,
+  onNext,
+  selectedCar,
+}) {
   const theme = useTheme();
-  const isValid = form.max_seats > 0;
+  const isValid =
+    form.max_seats > 0 &&
+    form.title.trim() !== "" &&
+    (!selectedCar || form.max_seats <= selectedCar.seats);
+
+  const isSeatsValid = !selectedCar || form.max_seats <= selectedCar.seats;
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -37,6 +48,53 @@ export default function SeatsStep({ form, setForm, onBack, onNext }) {
             paddingBottom: 80,
           }}
         >
+          {/* Title */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: 12,
+            }}
+          >
+            <Ionicons
+              name="text-outline"
+              size={20}
+              color={theme.colors.primary}
+              style={{ marginRight: 10 }}
+            />
+            <View style={{ flex: 1 }}>
+              <TextInput
+                style={{
+                  borderRadius: 10,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  backgroundColor: theme.colors.cardBackground,
+                  color: theme.colors.text,
+                  fontSize: 16,
+                  borderWidth: 1,
+                  borderColor:
+                    form.title.trim() === ""
+                      ? theme.colors.error
+                      : theme.colors.grey,
+                }}
+                value={form.title}
+                onChangeText={(v) => setForm((f) => ({ ...f, title: v }))}
+                placeholder="Enter carpool title (required)"
+                placeholderTextColor={theme.colors.grey}
+              />
+              {form.title.trim() === "" && (
+                <ThemeText
+                  style={{
+                    color: theme.colors.error,
+                    fontSize: 12,
+                    marginTop: 4,
+                  }}
+                >
+                  Title is required
+                </ThemeText>
+              )}
+            </View>
+          </View>
           {/* Max Seats */}
           <View
             style={{
@@ -51,27 +109,58 @@ export default function SeatsStep({ form, setForm, onBack, onNext }) {
               color={theme.colors.primary}
               style={{ marginRight: 10 }}
             />
-            <TextInput
-              style={{
-                flex: 1,
-                borderRadius: 10,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                backgroundColor: theme.colors.cardBackground,
-                color: theme.colors.text,
-                fontSize: 16,
-              }}
-              keyboardType="number-pad"
-              value={form.max_seats?.toString() || ""}
-              onChangeText={(v) =>
-                setForm((f) => ({
-                  ...f,
-                  max_seats: parseInt(v) || 0,
-                }))
-              }
-              placeholder="Max Seats"
-              placeholderTextColor={theme.colors.grey}
-            />
+            <View style={{ flex: 1 }}>
+              <TextInput
+                style={{
+                  borderRadius: 10,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  backgroundColor: theme.colors.cardBackground,
+                  color: theme.colors.text,
+                  fontSize: 16,
+                  borderWidth: 1,
+                  borderColor: !isSeatsValid
+                    ? theme.colors.error
+                    : theme.colors.grey,
+                }}
+                keyboardType="number-pad"
+                value={form.max_seats?.toString() || ""}
+                onChangeText={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    max_seats: parseInt(v) || 0,
+                  }))
+                }
+                placeholder="Max Seats"
+                placeholderTextColor={theme.colors.grey}
+              />
+              {selectedCar && (
+                <>
+                  <ThemeText
+                    style={{
+                      color: theme.colors.grey,
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    {selectedCar.make} {selectedCar.model} has{" "}
+                    {selectedCar.seats} seats
+                  </ThemeText>
+                  {!isSeatsValid && (
+                    <ThemeText
+                      style={{
+                        color: theme.colors.error,
+                        fontSize: 12,
+                        marginTop: 4,
+                      }}
+                    >
+                      Cannot exceed car's maximum capacity of{" "}
+                      {selectedCar.seats} seats
+                    </ThemeText>
+                  )}
+                </>
+              )}
+            </View>
           </View>
           {/* Price */}
           <View
