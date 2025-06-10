@@ -5,6 +5,11 @@ export const carpoolService = {
   async getCarpools(filters = {}) {
     const { status = "scheduled", ...otherFilters } = filters;
 
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
+
     let query = supabase
       .from("carpools")
       .select(
@@ -32,6 +37,7 @@ export const carpoolService = {
       `
       )
       .eq("status", status)
+      .neq("driver_id", user.id) // Exclude user's own carpools
       .order("departure_time", { ascending: true });
 
     // Apply additional filters
@@ -223,11 +229,20 @@ export const carpoolService = {
     } = await supabase.auth.getUser();
     if (!user) throw new Error("User not authenticated");
 
+    console.log("[getMyCarpools] Fetching carpools for user:", user.id);
+
     const { data, error } = await supabase
       .from("carpools")
       .select(
         `
         *,
+        driver:driver_id (
+          id,
+          username,
+          first_name,
+          last_name,
+          image_url
+        ),
         car:car_id (
           id,
           make,
@@ -249,10 +264,67 @@ export const carpoolService = {
         )
       `
       )
-      .or(`driver_id.eq.${user.id},carpool_passengers.user_id.eq.${user.id}`)
+      .eq("driver_id", user.id)
+      .eq("status", "scheduled")
       .order("departure_time", { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      console.error("[getMyCarpools] Error fetching carpools:", error);
+      throw error;
+    }
+
+    return data;
+  },
+
+  async getCarpoolRequests() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("User not authenticated");
+
+    const { data, error } = await supabase
+      .from("carpools")
+      .select(
+        `
+        *,
+        driver:driver_id (
+          id,
+          username,
+          first_name,
+          last_name,
+          image_url
+        ),
+        car:car_id (
+          id,
+          make,
+          model,
+          color,
+          seats
+        ),
+        passengers:carpool_passengers!inner (
+          id,
+          user_id,
+          status,
+          user:user_id (
+            id,
+            username,
+            first_name,
+            last_name,
+            image_url
+          )
+        )
+      `
+      )
+      .eq("carpool_passengers.user_id", user.id)
+      .eq("carpool_passengers.status", "pending")
+      .eq("status", "scheduled")
+      .order("departure_time", { ascending: true });
+
+    if (error) {
+      console.error("[getCarpoolRequests] Error fetching requests:", error);
+      throw error;
+    }
+
     return data;
   },
 };

@@ -44,7 +44,12 @@ export default function CarpoolScreen() {
     try {
       setIsLoading(true);
       setError(null);
-      const data = await carpoolService.getCarpools();
+      let data;
+      if (activeTab === "my-carpools") {
+        data = await carpoolService.getMyCarpools();
+      } else {
+        data = await carpoolService.getCarpools();
+      }
       setCarpools(data);
     } catch (err) {
       setError("Failed to fetch carpools");

@@ -1,3 +1,4 @@
+import { useAuth } from "@/contexts/AuthContext";
 import { getShortContent } from "@/helpers/common";
 import { useTheme } from "@/hooks/theme";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -28,6 +29,7 @@ const EmptyState = () => {
 
 const CarpoolList = ({ carpools, onCarpoolPress }) => {
   const theme = useTheme();
+  const { user } = useAuth();
 
   if (!carpools?.length) {
     return <EmptyState />;
@@ -39,6 +41,11 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
         const confirmedSeats =
           carpool.passengers?.filter((p) => p.status === "confirmed").length ||
           0;
+        const myPassenger = carpool.passengers?.find(
+          (p) => p.user_id === user?.id
+        );
+        const requestStatus = myPassenger?.status;
+
         return (
           <TouchableOpacity
             key={carpool.id}
@@ -80,16 +87,48 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
                     style={{ marginRight: 4 }}
                   />
                   <ThemeText color={theme.colors.grey} style={{ fontSize: 14 }}>
-                    {
-                      carpool.passengers.filter((p) => p.status === "confirmed")
-                        .length
-                    }
-                    /{carpool.max_seats} seats
+                    {confirmedSeats}/{carpool.max_seats} seats
                   </ThemeText>
                 </View>
-                <ThemeText color={theme.colors.primary} style={styles.price}>
-                  {carpool.price ? `€${carpool.price}` : "Free"}
-                </ThemeText>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  {requestStatus && (
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        {
+                          backgroundColor:
+                            requestStatus === "pending"
+                              ? theme.colors.warning + "20"
+                              : requestStatus === "confirmed"
+                              ? theme.colors.success + "20"
+                              : theme.colors.error + "20",
+                        },
+                      ]}
+                    >
+                      <ThemeText
+                        style={[
+                          styles.statusText,
+                          {
+                            color:
+                              requestStatus === "pending"
+                                ? theme.colors.warning
+                                : requestStatus === "confirmed"
+                                ? theme.colors.success
+                                : theme.colors.error,
+                          },
+                        ]}
+                      >
+                        {requestStatus.charAt(0).toUpperCase() +
+                          requestStatus.slice(1)}
+                      </ThemeText>
+                    </View>
+                  )}
+                  <ThemeText color={theme.colors.primary} style={styles.price}>
+                    {carpool.price ? `€${carpool.price}` : "Free"}
+                  </ThemeText>
+                </View>
               </View>
               {/* Car Info Row */}
 
@@ -351,7 +390,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   statusBadge: {
-    marginLeft: "auto",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   statusText: {
     fontSize: 12,
