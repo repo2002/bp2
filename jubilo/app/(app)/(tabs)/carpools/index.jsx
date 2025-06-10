@@ -21,6 +21,7 @@ export default function CarpoolScreen() {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState("available");
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [cars, setCars] = useState([]);
   const [carpools, setCarpools] = useState([]);
@@ -58,9 +59,8 @@ export default function CarpoolScreen() {
     }
   };
 
-  // Mock loading state
   const handleRefresh = async () => {
-    setIsLoading(true);
+    setIsRefreshing(true);
     setError(null);
     try {
       if (activeTab === "myCars") {
@@ -71,7 +71,7 @@ export default function CarpoolScreen() {
     } catch (err) {
       setError("Failed to refresh data");
     } finally {
-      setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -222,8 +222,11 @@ export default function CarpoolScreen() {
         renderItem={() => renderContent()}
         keyExtractor={() => "content"}
         refreshControl={
-          isLoading && activeTab !== "myCars" ? (
-            <RefreshControl refreshing={isLoading} onRefresh={handleRefresh} />
+          activeTab !== "myCars" ? (
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+            />
           ) : null
         }
       />

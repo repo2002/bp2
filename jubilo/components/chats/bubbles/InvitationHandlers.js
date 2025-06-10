@@ -13,11 +13,17 @@ export async function handleAccept(invitationId, eventId, userId) {
     // 2. Insert into event_participants
     const { error: participantError } = await supabase
       .from("event_participants")
-      .upsert({
-        event_id: eventId,
-        user_id: userId,
-        status: "going",
-      });
+      .upsert(
+        {
+          event_id: eventId,
+          user_id: userId,
+          status: "going",
+        },
+        {
+          onConflict: "event_id,user_id",
+          returning: "minimal",
+        }
+      );
 
     if (participantError) throw participantError;
 

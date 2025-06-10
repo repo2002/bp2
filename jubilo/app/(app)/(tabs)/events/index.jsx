@@ -7,7 +7,13 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 
 export default function EventsScreen() {
   const router = useRouter();
@@ -17,25 +23,30 @@ export default function EventsScreen() {
     events: invitations,
     loading: loadingInvitations,
     updateFilters: updateInvitationFilters,
+    refresh: refreshInvitations,
   } = useEventList();
   const {
     events: ownEvents,
     loading: loadingOwn,
     updateFilters: updateOwnFilters,
+    refresh: refreshOwn,
   } = useEventList();
   const {
     events: goingEvents,
     loading: loadingGoing,
     updateFilters: updateGoingFilters,
+    refresh: refreshGoing,
   } = useEventList();
   const {
     events: upcomingEvents,
     loading: loadingUpcoming,
     updateFilters: updateUpcomingFilters,
+    refresh: refreshUpcoming,
   } = useEventList();
 
   const [userLocation, setUserLocation] = useState(null);
   const [userAddress, setUserAddress] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -95,6 +106,20 @@ export default function EventsScreen() {
     router.push(`/events/${eventId}`);
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        refreshInvitations(),
+        refreshOwn(),
+        refreshGoing(),
+        refreshUpcoming(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   if (loadingInvitations && !invitations.length) {
     return (
       <View
@@ -150,6 +175,9 @@ export default function EventsScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
       {/* Event Invitations Section */}
       {invitations.length > 0 && (

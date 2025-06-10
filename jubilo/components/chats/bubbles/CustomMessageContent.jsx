@@ -95,14 +95,25 @@ function CustomMessageContent({ currentMessage, theme, currentUserId }) {
         <InvitationCard
           event={eventData}
           status={eventData?.status || "pending"}
-          onAccept={() =>
-            handleAccept(
-              eventData?.invitation_id,
-              eventData?.eventId,
-              eventData?.user_id
-            )
-          }
-          onDecline={() => handleDecline(eventData?.invitation_id)}
+          onAccept={async () => {
+            try {
+              await handleAccept(
+                eventData?.invitation_id,
+                eventData?.eventId,
+                eventData?.user_id
+              );
+            } catch (error) {
+              console.error("Error in onAccept:", error);
+            }
+          }}
+          onDecline={async () => {
+            try {
+              await handleDecline(eventData?.invitation_id);
+            } catch (error) {
+              console.error("Error in onDecline:", error);
+            }
+          }}
+          currentUserId={currentUserId}
         />
         <MessageTimestamp
           currentMessage={currentMessage}

@@ -14,7 +14,7 @@ export default function InvitationCard({
 }) {
   const theme = useTheme();
   const router = useRouter();
-  const isInvitee = currentUserId === event.user_id;
+  let isInvitee = currentUserId === event.user_id;
   const [latestStatus, setLatestStatus] = useState(status);
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +27,9 @@ export default function InvitationCard({
         .select("status")
         .eq("id", event.invitation_id)
         .single();
-      if (data && data.status) setLatestStatus(data.status);
+      if (data) {
+        setLatestStatus(data.status);
+      }
     }
     fetchStatus();
   }, [event.invitation_id]);

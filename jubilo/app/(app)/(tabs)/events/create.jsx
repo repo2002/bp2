@@ -543,53 +543,55 @@ export default function CreateEventScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <View style={{ flex: 1 }}>
-        <View
-          style={[
-            styles.form,
-            { backgroundColor: theme.colors.background, flex: 1 },
-          ]}
-        >
-          {renderStepIndicator()}
-          {renderStepContent()}
-        </View>
-        <View style={styles.buttonContainer}>
-          {currentStep > 1 && (
+    <>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <View style={{ flex: 1 }}>
+          <View
+            style={[
+              styles.form,
+              { backgroundColor: theme.colors.background, flex: 1 },
+            ]}
+          >
+            {renderStepIndicator()}
+            {renderStepContent()}
+          </View>
+          <View style={styles.buttonContainer}>
+            {currentStep > 1 && (
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  styles.backButton,
+                  { borderColor: theme.colors.text },
+                ]}
+                onPress={handleBack}
+              >
+                <ThemeText
+                  style={[styles.buttonText, { color: theme.colors.text }]}
+                >
+                  Back
+                </ThemeText>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[
                 styles.button,
-                styles.backButton,
-                { borderColor: theme.colors.text },
+                styles.nextButton,
+                { backgroundColor: theme.colors.primary },
               ]}
-              onPress={handleBack}
+              onPress={handleNext}
             >
               <ThemeText
-                style={[styles.buttonText, { color: theme.colors.text }]}
+                style={[styles.buttonText, { color: theme.colors.background }]}
               >
-                Back
+                {currentStep === 3 ? "Create Event" : "Next"}
               </ThemeText>
             </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[
-              styles.button,
-              styles.nextButton,
-              { backgroundColor: theme.colors.primary },
-            ]}
-            onPress={handleNext}
-          >
-            <ThemeText
-              style={[styles.buttonText, { color: theme.colors.background }]}
-            >
-              {currentStep === 3 ? "Create Event" : "Next"}
-            </ThemeText>
-          </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
       <LocationPickerBottomSheet
         ref={locationSheetRef}
         initialLocation={
@@ -604,7 +606,7 @@ export default function CreateEventScreen() {
         onConfirm={handleLocationConfirm}
         style={{ zIndex: 100 }}
       />
-    </KeyboardAvoidingView>
+    </>
   );
 }
 
