@@ -1,7 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const CACHE_KEY_PREFIX = "event_qna_";
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
@@ -17,11 +17,24 @@ export function useEventQnA(eventId) {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [upvoting, setUpvoting] = useState({});
+  const mountedRef = useRef(true);
+  const subscriptionsRef = useRef([]);
 
   const PAGE_SIZE = 10;
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      // Cleanup all subscriptions
+      subscriptionsRef.current.forEach((sub) => sub.unsubscribe());
+      subscriptionsRef.current = [];
+    };
+  }, []);
+
   // Load from cache
   const loadCachedData = async () => {
+    if (!eventId) return false;
     try {
       const cached = await AsyncStorage.getItem(
         `${CACHE_KEY_PREFIX}${eventId}`
@@ -29,7 +42,9 @@ export function useEventQnA(eventId) {
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
         if (Date.now() - timestamp < CACHE_EXPIRY) {
-          setQuestions(data);
+          if (mountedRef.current) {
+            setQuestions(data);
+          }
           return true;
         }
       }
@@ -42,6 +57,7 @@ export function useEventQnA(eventId) {
 
   // Cache data
   const cacheData = async (data) => {
+    if (!eventId) return;
     try {
       await AsyncStorage.setItem(
         `${CACHE_KEY_PREFIX}${eventId}`,
@@ -54,6 +70,8 @@ export function useEventQnA(eventId) {
 
   const fetchQuestions = useCallback(
     async (pageNum = 0, shouldRefresh = false) => {
+      if (!eventId || !mountedRef.current) return;
+
       try {
         setError(null);
         if (pageNum === 0) {
@@ -94,6 +112,8 @@ export function useEventQnA(eventId) {
 
         if (questionsError) throw questionsError;
 
+        if (!mountedRef.current) return;
+
         // Get upvoted questions for current user
         const { data: upvotedData, error: upvotedError } = await supabase
           .from("event_question_upvotes")
@@ -105,6 +125,8 @@ export function useEventQnA(eventId) {
           );
 
         if (upvotedError) throw upvotedError;
+
+        if (!mountedRef.current) return;
 
         const upvotedMap = {};
         upvotedData.forEach((upvote) => {
@@ -145,15 +167,22 @@ export function useEventQnA(eventId) {
           });
         }
 
-        setUpvoted((prev) => ({ ...prev, ...upvotedMap }));
-        setHasMore(questionsData.length === PAGE_SIZE);
-        setPage(pageNum);
+        if (mountedRef.current) {
+          setUpvoted((prev) => ({ ...prev, ...upvotedMap }));
+          setHasMore(questionsData.length === PAGE_SIZE);
+          setPage(pageNum);
+          cacheData(processedQuestions);
+        }
       } catch (err) {
         console.error("Error fetching questions:", err);
-        setError(err.message);
+        if (mountedRef.current) {
+          setError(err.message);
+        }
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (mountedRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
     [eventId, user.id]
@@ -337,7 +366,11 @@ export function useEventQnA(eventId) {
 
   // Set up real-time subscriptions
   useEffect(() => {
-    if (!eventId) return;
+    if (!eventId || !mountedRef.current) return;
+
+    // Cleanup previous subscriptions
+    subscriptionsRef.current.forEach((sub) => sub.unsubscribe());
+    subscriptionsRef.current = [];
 
     // Subscribe to new questions
     const questionsSubscription = supabase
@@ -351,6 +384,7 @@ export function useEventQnA(eventId) {
           filter: `event_id=eq.${eventId}`,
         },
         (payload) => {
+          if (!mountedRef.current) return;
           // Only add if not already in the list
           setQuestions((prev) => {
             if (prev.some((q) => q.id === payload.new.id)) return prev;
@@ -359,6 +393,7 @@ export function useEventQnA(eventId) {
         }
       )
       .subscribe();
+    subscriptionsRef.current.push(questionsSubscription);
 
     // Subscribe to question updates (including upvotes)
     const questionUpdatesSubscription = supabase
@@ -380,6 +415,7 @@ export function useEventQnA(eventId) {
         }
       )
       .subscribe();
+    subscriptionsRef.current.push(questionUpdatesSubscription);
 
     // Subscribe to new answers
     const answersSubscription = supabase
@@ -419,6 +455,7 @@ export function useEventQnA(eventId) {
         }
       )
       .subscribe();
+    subscriptionsRef.current.push(answersSubscription);
 
     // Subscribe to upvote changes
     const upvotesSubscription = supabase
@@ -464,15 +501,14 @@ export function useEventQnA(eventId) {
         }
       )
       .subscribe();
+    subscriptionsRef.current.push(upvotesSubscription);
 
     // Initial fetch
     fetchQuestions();
 
     return () => {
-      questionsSubscription.unsubscribe();
-      questionUpdatesSubscription.unsubscribe();
-      answersSubscription.unsubscribe();
-      upvotesSubscription.unsubscribe();
+      subscriptionsRef.current.forEach((sub) => sub.unsubscribe());
+      subscriptionsRef.current = [];
     };
   }, [eventId, user.id, questions, fetchQuestions]);
 

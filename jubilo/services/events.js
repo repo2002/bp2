@@ -88,17 +88,7 @@ export const getEventDetails = async (eventId, currentUserId = null) => {
       .from("events")
       .select(
         `
-        id,
-        title,
-        description,
-        start_time,
-        end_time,
-        timezone,
-        category,
-        is_private,
-        max_participants,
-        location,
-        creator_id,
+        *,
         creator:profiles!creator_id(
           id,
           username,
@@ -194,6 +184,9 @@ export const getEventDetails = async (eventId, currentUserId = null) => {
     const isParticipant = !!data.participants?.find(
       (p) => p.user?.id === currentUserId
     );
+    const isGoing = !!data.participants?.find(
+      (p) => p.user?.id === currentUserId && p.status === "going"
+    );
     const isInvited = !!data.invites?.find(
       (i) => i.user?.id === currentUserId && i.status === "pending"
     );
@@ -202,8 +195,7 @@ export const getEventDetails = async (eventId, currentUserId = null) => {
     );
     const canEdit = isOwner;
     const canInvite = isOwner && data.is_private;
-    const canUploadImages =
-      isOwner || (data.allow_user_images && isParticipant);
+    const canUploadImages = isOwner || (data.allow_guests_to_post && isGoing);
     const canAnswerQnA =
       isOwner || (data.is_private ? isParticipant : isFollowing);
 

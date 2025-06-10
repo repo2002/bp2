@@ -87,7 +87,11 @@ export default function InvitationCard({
     >
       <View style={styles.content}>
         <TouchableOpacity
-          onPress={handleTitlePress}
+          onPress={
+            latestStatus === "pending" || latestStatus === "declined"
+              ? null
+              : handleTitlePress
+          }
           style={{
             flexDirection: "row",
             justifyContent: "space-between",

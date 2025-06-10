@@ -1,5 +1,5 @@
 import { useTheme } from "@/hooks/theme";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dimensions,
   Image,
@@ -10,22 +10,58 @@ import {
 } from "react-native";
 import MasonryList from "react-native-masonry-list";
 
-export default function EventGallery({ images }) {
+export default function EventGallery({ images = [] }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
+  const [imageDimensions, setImageDimensions] = useState({
+    width: 0,
+    height: 0,
+  });
+  const [error, setError] = useState(null);
   const theme = useTheme();
 
   if (!images?.length) return null;
 
   const openModal = (idx) => {
-    setSelectedIdx(idx);
-    setModalVisible(true);
+    if (idx >= 0 && idx < images.length) {
+      setSelectedIdx(idx);
+      setModalVisible(true);
+      setImageDimensions({ width: 0, height: 0 });
+      setError(null);
+    }
   };
+
+  // Calculate image dimensions when selected image changes
+  useEffect(() => {
+    if (modalVisible && images[selectedIdx]?.image_url) {
+      Image.getSize(
+        images[selectedIdx].image_url,
+        (width, height) => {
+          const screenWidth = Dimensions.get("window").width - 32;
+          const scaleFactor = width / screenWidth;
+          const scaledHeight = height / scaleFactor;
+
+          setImageDimensions({
+            width: screenWidth,
+            height: scaledHeight,
+          });
+        },
+        (error) => {
+          console.error("Error loading image:", error);
+          setError("Failed to load image");
+          setModalVisible(false);
+        }
+      );
+    }
+  }, [modalVisible, selectedIdx, images]);
+
+  // Filter out invalid images
+  const validImages = images.filter((img) => img?.image_url);
 
   return (
     <>
       <MasonryList
-        images={images.map((img) => ({ uri: img.image_url }))}
+        images={validImages.map((img) => ({ uri: img.image_url }))}
         imageContainerStyle={{
           borderRadius: 8,
           backgroundColor: theme.colors.background,
@@ -53,14 +89,35 @@ export default function EventGallery({ images }) {
             onPress={() => setModalVisible(false)}
             activeOpacity={1}
           >
-            <Image
-              source={{ uri: images[selectedIdx]?.image_url }}
-              style={[
-                styles.fullImage,
-                { backgroundColor: theme.colors.cardBackground },
-              ]}
-              resizeMode="contain"
-            />
+            {error ? (
+              <View style={styles.errorContainer}>
+                <ThemeText style={{ color: theme.colors.error }}>
+                  {error}
+                </ThemeText>
+              </View>
+            ) : (
+              imageDimensions.width > 0 && (
+                <Image
+                  source={{ uri: images[selectedIdx]?.image_url }}
+                  style={[
+                    styles.fullImage,
+                    {
+                      width: imageDimensions.width,
+                      height: imageDimensions.height,
+                      backgroundColor: theme.colors.cardBackground,
+                    },
+                  ]}
+                  resizeMode="contain"
+                  onError={(e) => {
+                    console.error(
+                      "Error displaying image:",
+                      e.nativeEvent.error
+                    );
+                    setError("Failed to display image");
+                  }}
+                />
+              )
+            )}
           </TouchableOpacity>
         </View>
       </Modal>
@@ -86,8 +143,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   fullImage: {
-    width: Dimensions.get("window").width - 32,
-    height: Dimensions.get("window").height * 0.5,
     borderRadius: 12,
+  },
+  errorContainer: {
+    padding: 16,
+    borderRadius: 12,
+  },
+  errorText: {
+    textAlign: "center",
   },
 });

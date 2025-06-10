@@ -1,13 +1,16 @@
 import BottomSheetModal from "@/components/BottomSheetModal";
 import EventGallery from "@/components/events/EventGallery";
 import ThemeText from "@/components/theme/ThemeText";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/theme";
 import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -18,16 +21,36 @@ export default function EventImagesBottomSheet({
   visible,
   onClose,
   images = [],
-  canUpload = false,
+  canUploadImages = false,
   onUploaded, // callback to refresh images after upload
 }) {
   const sheetRef = useRef(null);
   const theme = useTheme();
+  const { user } = useAuth();
   const snapPoints = ["70%", "90%"];
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Log when bottom sheet opens
+  useEffect(() => {
+    if (visible) {
+    }
+  }, [visible, eventId, user?.id, canUploadImages, images]);
+
   const handlePickAndUpload = async () => {
+    if (!user?.id) {
+      Alert.alert("Error", "You must be logged in to upload images");
+      return;
+    }
+
+    if (!canUploadImages) {
+      Alert.alert(
+        "Error",
+        "You don't have permission to upload images to this event"
+      );
+      return;
+    }
+
     setError(null);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -36,37 +59,72 @@ export default function EventImagesBottomSheet({
         aspect: [16, 9],
         quality: 0.8,
       });
+
       if (result.canceled) return;
       setUploading(true);
+
       const image = result.assets[0];
       const fileExt = image.uri.split(".").pop();
       const fileName = `${Date.now()}.${fileExt}`;
       const filePath = `event-images/${eventId}/${fileName}`;
+
+      // Read the file as base64
+      const base64 = await FileSystem.readAsStringAsync(image.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
       // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from("events")
-        .upload(filePath, {
-          uri: image.uri,
-          type: `image/${fileExt}`,
-          name: fileName,
+        .upload(filePath, decode(base64), {
+          contentType: `image/${fileExt}`,
+          upsert: false,
         });
-      if (uploadError) throw uploadError;
+
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        throw new Error(uploadError.message);
+      }
+
       // Get public URL
       const {
         data: { publicUrl },
       } = supabase.storage.from("events").getPublicUrl(filePath);
+
+      if (!publicUrl) {
+        throw new Error("Failed to get public URL for uploaded image");
+      }
+
       // Insert into event_images
       const { error: dbError } = await supabase.from("event_images").insert({
         event_id: eventId,
         image_url: publicUrl,
+        user_id: user.id,
       });
-      if (dbError) throw dbError;
+
+      if (dbError) {
+        console.error("Database error:", dbError);
+        throw new Error(dbError.message);
+      }
+
       setUploading(false);
       onUploaded?.();
     } catch (err) {
+      console.error("Upload error:", err);
       setUploading(false);
       setError(err.message || "Failed to upload image");
+      Alert.alert("Upload Failed", err.message || "Failed to upload image");
     }
+  };
+
+  // Helper function to decode base64
+  const decode = (base64) => {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
   };
 
   return (
@@ -87,7 +145,7 @@ export default function EventImagesBottomSheet({
         }}
       >
         <View style={styles.container}>
-          {canUpload && (
+          {canUploadImages && (
             <View style={styles.headerRow}>
               <TouchableOpacity
                 style={styles.addBtn}

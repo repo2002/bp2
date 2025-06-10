@@ -14,10 +14,12 @@ import { useEventQnA } from "@/hooks/events/useEventQnA";
 import { useTheme } from "@/hooks/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -36,6 +38,9 @@ export default function EventDetailsScreen() {
   const [qnaSheetOpen, setQnASheetOpen] = useState(false);
   const [participantsModalVisible, setParticipantsModalVisible] =
     useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
+  const refreshTimeoutRef = useRef(null);
 
   // Use new hooks
   const {
@@ -45,7 +50,7 @@ export default function EventDetailsScreen() {
     updateEvent,
     joinEvent,
     leaveEvent,
-    refresh: refreshEvent,
+    refetch: refreshEvent,
   } = useEventDetails(id);
   const {
     participants,
@@ -62,6 +67,36 @@ export default function EventDetailsScreen() {
     error: qnaError,
     refresh: refreshQnA,
   } = useEventQnA(id);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Coordinated refresh function
+  const handleRefresh = useCallback(async () => {
+    if (refreshing || !mountedRef.current) return;
+
+    setRefreshing(true);
+    try {
+      // Start all refreshes in parallel
+      await Promise.all([refreshEvent(), refreshParticipants(), refreshQnA()]);
+    } catch (error) {
+      console.error("Error during refresh:", error);
+    } finally {
+      // Add a small delay before ending the refresh to prevent the warning
+      refreshTimeoutRef.current = setTimeout(() => {
+        if (mountedRef.current) {
+          setRefreshing(false);
+        }
+      }, 500);
+    }
+  }, [refreshing, refreshEvent, refreshParticipants, refreshQnA]);
 
   // Compute top question and answer from useEventQnA
   const topQuestion = questions?.length
@@ -83,32 +118,44 @@ export default function EventDetailsScreen() {
 
   // Join/Leave handlers
   const handleJoin = async () => {
+    if (!mountedRef.current) return;
+
     setActionLoading(true);
     try {
       await joinEvent("going");
       // No need to refresh event or participants as they're handled by real-time updates
     } catch (e) {
+      if (!mountedRef.current) return;
       Alert.alert("Error", e.message || "Failed to join event");
     } finally {
-      setActionLoading(false);
+      if (mountedRef.current) {
+        setActionLoading(false);
+      }
     }
   };
 
   const handleLeave = async () => {
+    if (!mountedRef.current) return;
+
     Alert.alert("Leave Event", "Are you sure you want to leave this event?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Leave",
         style: "destructive",
         onPress: async () => {
+          if (!mountedRef.current) return;
+
           setActionLoading(true);
           try {
             await leaveEvent();
             // No need to refresh event or participants as they're handled by real-time updates
           } catch (e) {
+            if (!mountedRef.current) return;
             Alert.alert("Error", e.message || "Failed to leave event");
           } finally {
-            setActionLoading(false);
+            if (mountedRef.current) {
+              setActionLoading(false);
+            }
           }
         },
       },
@@ -127,21 +174,51 @@ export default function EventDetailsScreen() {
           { backgroundColor: theme.colors.background },
         ]}
       >
-        <ThemeText>Loading...</ThemeText>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
-  if (error || !event) {
+
+  if (error) {
     return (
       <View
         style={[
-          styles.loadingContainer,
+          styles.errorContainer,
           { backgroundColor: theme.colors.background },
         ]}
       >
-        <ThemeText style={{ color: theme.colors.error }}>
-          {error || "Event not found"}
-        </ThemeText>
+        <ThemeText style={{ color: theme.colors.error }}>{error}</ThemeText>
+        <TouchableOpacity
+          style={[
+            styles.retryButton,
+            { backgroundColor: theme.colors.primary },
+          ]}
+          onPress={() => refreshEvent()}
+        >
+          <ThemeText style={{ color: "#fff" }}>Retry</ThemeText>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!event) {
+    return (
+      <View
+        style={[
+          styles.errorContainer,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <ThemeText>Event not found</ThemeText>
+        <TouchableOpacity
+          style={[
+            styles.retryButton,
+            { backgroundColor: theme.colors.primary },
+          ]}
+          onPress={() => router.back()}
+        >
+          <ThemeText style={{ color: "#fff" }}>Go Back</ThemeText>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -161,7 +238,17 @@ export default function EventDetailsScreen() {
 
   return (
     <>
-      <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: theme.colors.background }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[theme.colors.primary]}
+            tintColor={theme.colors.primary}
+          />
+        }
+      >
         {/* Image Cover + Top Buttons */}
         <View style={styles.coverContainer}>
           {event.images?.[0]?.image_url ? (
@@ -169,6 +256,12 @@ export default function EventDetailsScreen() {
               source={{ uri: event.images[0].image_url }}
               style={styles.coverImage}
               resizeMode="cover"
+              onError={(e) => {
+                console.error(
+                  "Error loading cover image:",
+                  e.nativeEvent.error
+                );
+              }}
             />
           ) : (
             <View
@@ -184,7 +277,7 @@ export default function EventDetailsScreen() {
               <Ionicons
                 name="image-outline"
                 size={40}
-                color={theme.colors.textSecondary}
+                color={theme.colors.grey}
               />
             </View>
           )}
@@ -340,6 +433,12 @@ export default function EventDetailsScreen() {
                     borderWidth: 2,
                     borderColor: theme.colors.background,
                   }}
+                  onError={(e) => {
+                    console.error(
+                      "Error loading participant avatar:",
+                      e.nativeEvent.error
+                    );
+                  }}
                 />
               ))}
             </View>
@@ -437,7 +536,13 @@ export default function EventDetailsScreen() {
                       height: 100,
                       borderRadius: 8,
                       marginRight: 8,
-                      backgroundColor: theme.colors.border,
+                      resizeMode: "cover",
+                    }}
+                    onError={(e) => {
+                      console.error(
+                        "Error loading event image:",
+                        e.nativeEvent.error
+                      );
                     }}
                   />
                 </TouchableOpacity>
@@ -486,6 +591,12 @@ export default function EventDetailsScreen() {
                     uri={topQuestion.user?.image_url}
                     size={24}
                     style={{ marginRight: 8 }}
+                    onError={(e) => {
+                      console.error(
+                        "Error loading question avatar:",
+                        e.nativeEvent.error
+                      );
+                    }}
                   />
                   <ThemeText style={styles.topQuestionUsername}>
                     {topQuestion.user?.username}
@@ -511,6 +622,12 @@ export default function EventDetailsScreen() {
                         uri={topAnswer.user?.image_url}
                         size={20}
                         style={{ marginRight: 6 }}
+                        onError={(e) => {
+                          console.error(
+                            "Error loading answer avatar:",
+                            e.nativeEvent.error
+                          );
+                        }}
                       />
                       <ThemeText style={styles.topAnswerUsername}>
                         {topAnswer.user?.username}
@@ -551,7 +668,7 @@ export default function EventDetailsScreen() {
         visible={imagesSheetOpen}
         onClose={() => setImagesSheetOpen(false)}
         images={event.images}
-        canUpload={canUploadImages}
+        canUploadImages={canUploadImages}
         onUploaded={refreshEvent}
       />
 
@@ -583,7 +700,24 @@ export default function EventDetailsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+  },
+  retryButton: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 8,
+    minWidth: 120,
+    alignItems: "center",
+  },
   coverContainer: { height: 250, position: "relative" },
   coverImage: { width: "100%", height: "100%" },
   backButton: {
@@ -700,27 +834,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginLeft: 8,
   },
-  actionBtnText: {
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  followersRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 16,
-    marginBottom: 8,
-  },
-  followersCount: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: "#888",
-  },
   actionButton: {
     flex: 1,
     paddingHorizontal: 0,
     paddingVertical: 8,
     borderRadius: 8,
     marginBottom: 0,
+  },
+  actionBtnText: {
+    fontWeight: "bold",
+    fontSize: 16,
   },
   topQuestionCard: {
     marginHorizontal: 16,
@@ -784,5 +907,16 @@ const styles = StyleSheet.create({
   topAnswerCount: {
     fontSize: 13,
     color: "#666",
+  },
+  followersRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  followersCount: {
+    marginLeft: 8,
+    fontSize: 16,
+    color: "#888",
   },
 });
