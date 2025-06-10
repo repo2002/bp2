@@ -104,12 +104,10 @@ export const carpoolService = {
   },
 
   async updateCarpool(id, updates) {
-    // Remove chat_room_id if present
-    const { chat_room_id, ...updatesWithoutChatRoom } = updates;
     const { data, error } = await supabase
       .from("carpools")
       .update({
-        ...updatesWithoutChatRoom,
+        ...updates,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)

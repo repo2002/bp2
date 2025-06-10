@@ -132,7 +132,7 @@ export default function CarpoolDetailsScreen() {
     (p) => p.user_id === user?.id && p.status === "pending"
   );
 
-  const myPassenger = carpool.passengers?.find((p) => p.user_id === user?.id);
+  const myPassenger = carpool?.passengers?.find((p) => p.user_id === user?.id);
   const isCancelled = myPassenger?.status === "cancelled";
 
   // Handler to create carpool group chat
@@ -169,12 +169,6 @@ export default function CarpoolDetailsScreen() {
         error,
       } = await createGroupChat(carpool.driver_id, chatName, participantIds);
       if (success && chatRoom?.id) {
-        console.log(
-          "Attempting to update carpool",
-          carpool.id,
-          "with chat_room_id",
-          chatRoom.id
-        );
         const { data: updateResult, error: updateError } =
           await carpoolService.updateCarpool(carpool.id, {
             chat_room_id: chatRoom.id,
@@ -189,7 +183,6 @@ export default function CarpoolDetailsScreen() {
             updateError.message || "Failed to update carpool with chat room"
           );
         } else {
-          console.log("Carpool updated with chat_room_id:", updateResult);
           setCarpool((prev) => ({ ...prev, chat_room_id: chatRoom.id }));
           Alert.alert("Success", "Carpool group chat created!");
           fetchCarpool();
@@ -200,6 +193,7 @@ export default function CarpoolDetailsScreen() {
     } catch (e) {
       Alert.alert("Error", e.message || "Failed to create chat room");
     } finally {
+      router.push(`/chats/${chatRoom.id}`);
       setIsCreatingChat(false);
     }
   };
@@ -280,7 +274,7 @@ export default function CarpoolDetailsScreen() {
             onPress={router.back}
             style={{
               position: "absolute",
-              top: 32,
+              top: 45,
               left: 6,
               backgroundColor: theme.colors.grey,
               padding: 8,
