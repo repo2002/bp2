@@ -6,6 +6,7 @@ import { useTheme } from "@/hooks/theme";
 import { getEvents } from "@/services/events";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -18,6 +19,7 @@ import {
 
 export default function RouteStep({ form, setForm, onBack, onNext }) {
   const theme = useTheme();
+  const params = useLocalSearchParams();
   const [showDepartureTime, setShowDepartureTime] = useState(false);
   const [showDestinationTime, setShowDestinationTime] = useState(false);
   const departureSheetRef = useRef();
@@ -29,6 +31,31 @@ export default function RouteStep({ form, setForm, onBack, onNext }) {
   const [showEventModal, setShowEventModal] = useState(false);
   const [events, setEvents] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
+
+  // Initialize with event data from URL if available
+  useEffect(() => {
+    if (params.event_id && !form.event_id) {
+      setForm((f) => ({
+        ...f,
+        event_id: params.event_id,
+        destination_location: params.event_location
+          ? {
+              address: params.event_location,
+              latitude: parseFloat(params.event_lat),
+              longitude: parseFloat(params.event_lng),
+              description: params.event_location,
+            }
+          : null,
+        destination_time: params.event_time
+          ? new Date(params.event_time)
+          : new Date(),
+        title: params.event_title
+          ? `Carpool to ${params.event_title}`
+          : f.title,
+      }));
+      setIsForEvent(true);
+    }
+  }, [params]);
 
   useEffect(() => {
     if (isForEvent && events.length === 0) {

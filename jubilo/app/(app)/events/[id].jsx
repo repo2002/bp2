@@ -750,7 +750,19 @@ export default function EventDetailsScreen() {
               Available Carpools
             </ThemeText>
             <TouchableOpacity
-              onPress={() => router.push(`/carpools/new?event_id=${id}`)}
+              onPress={() =>
+                router.push({
+                  pathname: "/carpools/create",
+                  params: {
+                    event_id: id,
+                    event_title: event.title,
+                    event_time: event.start_time,
+                    event_location: event.location?.address,
+                    event_lat: event.location?.lat,
+                    event_lng: event.location?.lng,
+                  },
+                })
+              }
             >
               <ThemeText
                 color={theme.colors.primary}
