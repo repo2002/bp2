@@ -92,23 +92,9 @@ const Profile = () => {
     {
       label: "Create a carpool",
       onPress: () => {
-        router.push("/carpools");
+        router.push("/carpools/create");
       },
       icon: "car",
-    },
-    {
-      label: "List new item",
-      onPress: () => {
-        router.push("/marketplace");
-      },
-      icon: "shopping-outline",
-    },
-    {
-      label: "Create an event",
-      onPress: () => {
-        router.push("/events");
-      },
-      icon: "calendar-outline",
     },
   ];
 

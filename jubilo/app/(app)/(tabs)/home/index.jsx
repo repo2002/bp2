@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 import { FlatList, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const LIMIT = 4;
+const LIMIT = 10;
 
 export default function Home() {
   const { user } = useAuth();

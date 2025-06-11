@@ -157,7 +157,7 @@ export const createOrUpdatePost = async (post) => {
   }
 };
 
-export async function fetchPosts({ limit = 4, offset = 0 } = {}) {
+export async function fetchPosts({ limit = 10, offset = 0 } = {}) {
   try {
     const {
       data: { user },
