@@ -12,7 +12,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.repo2002.jubilo",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "This app needs access to your microphone to record audio messages."
+        "NSMicrophoneUsageDescription": "This app needs access to your microphone to record audio messages.",
+        "NSPhotoLibraryUsageDescription": "Jubilo needs access to your photos to let you add images to events.",
+        "NSCameraUsageDescription": "Jubilo needs access to your camera to let you take photos for events."
       }
     },
     "android": {
@@ -55,7 +57,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Jubilo needs access to your photos to let you change your profile picture."
+          "photosPermission": "Jubilo needs access to your photos to let you add images to events.",
+          "cameraPermission": "Jubilo needs access to your camera to let you take photos for events."
         }
       ],
       [

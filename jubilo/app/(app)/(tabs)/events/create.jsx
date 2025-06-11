@@ -2,9 +2,9 @@ import { useTheme } from "@/hooks/theme";
 import { supabase } from "@/lib/supabase";
 import { createEvent, uploadEventImage } from "@/services/events";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { useRef, useState } from "react";
-import ImagePicker from "react-native-image-crop-picker";
 
 import LocationPickerBottomSheet from "@/components/LocationPickerBottomSheet";
 import ThemeText from "@/components/theme/ThemeText";
@@ -68,22 +68,34 @@ export default function CreateEventScreen() {
 
   const pickImage = async () => {
     try {
-      const result = await ImagePicker.openPicker({
-        mediaType: "photo",
+      // Request permission
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission needed",
+          "Please grant permission to access your photos"
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
         quality: 0.8,
       });
 
-      if (result) {
+      if (!result.canceled) {
         setSelectedImage({
-          uri: result.path,
-          width: result.width,
-          height: result.height,
+          uri: result.assets[0].uri,
+          width: result.assets[0].width,
+          height: result.assets[0].height,
         });
       }
     } catch (error) {
-      if (error.message !== "User cancelled image selection") {
-        Alert.alert("Error", "Failed to pick image");
-      }
+      console.error("Error picking image:", error);
+      Alert.alert("Error", "Failed to pick image");
     }
   };
 
@@ -117,33 +129,46 @@ export default function CreateEventScreen() {
 
       // Upload image if selected
       if (selectedImage) {
-        const { success, error } = await uploadEventImage(
-          event.id,
-          selectedImage.uri,
-          true
-        );
-        if (!success) {
-          console.error("Failed to upload event image:", error);
+        try {
+          const { success, error } = await uploadEventImage(
+            event.id,
+            selectedImage.uri,
+            true
+          );
+          if (!success) {
+            console.error("Failed to upload event image:", error);
+            // Continue anyway since the event was created
+          }
+        } catch (error) {
+          console.error("Error uploading image:", error);
           // Continue anyway since the event was created
         }
       }
 
       // Add creator as participant
-      await supabase.from("event_participants").insert([
-        {
-          event_id: event.id,
-          user_id: user.id,
-          status: "going",
-        },
-      ]);
+      try {
+        await supabase.from("event_participants").insert([
+          {
+            event_id: event.id,
+            user_id: user.id,
+            status: "going",
+          },
+        ]);
+      } catch (error) {
+        console.error("Error adding participant:", error);
+        // Continue anyway since the event was created
+      }
 
-      // Close the modal (screen) after event creation
-      router.back();
-
-      // Navigate to event details
+      // Navigate to event details first
       router.push(`/events/${event.id}`);
+
+      // Then close the modal after a short delay
+      setTimeout(() => {
+        router.back();
+      }, 100);
     } catch (error) {
-      Alert.alert("Error", error.message);
+      console.error("Error creating event:", error);
+      Alert.alert("Error", error.message || "Failed to create event");
     }
   };
 

@@ -61,11 +61,7 @@ export default function EventGallery({ images = [] }) {
   return (
     <>
       <MasonryList
-        images={validImages.map((img) => ({
-          uri: img.image_url,
-          dimensions: { width: 300, height: 300 }, // Add default dimensions
-          priority: "high",
-        }))}
+        images={validImages.map((img) => ({ uri: img.image_url }))}
         imageContainerStyle={{
           borderRadius: 8,
           backgroundColor: theme.colors.background,
@@ -75,9 +71,6 @@ export default function EventGallery({ images = [] }) {
         backgroundColor={theme.colors.background}
         columns={2}
         onPressImage={(item, index) => openModal(index)}
-        customImageComponent={({ source, style }) => (
-          <Image source={source} style={style} resizeMode="cover" />
-        )}
       />
       <Modal
         visible={modalVisible}
@@ -105,10 +98,7 @@ export default function EventGallery({ images = [] }) {
             ) : (
               imageDimensions.width > 0 && (
                 <Image
-                  source={{
-                    uri: images[selectedIdx]?.image_url,
-                    cache: "force-cache", // Force cache for modal image
-                  }}
+                  source={{ uri: images[selectedIdx]?.image_url }}
                   style={[
                     styles.fullImage,
                     {
@@ -139,6 +129,7 @@ const styles = StyleSheet.create({
   galleryRow: {
     flexDirection: "row",
     flexWrap: "wrap",
+    // No padding or margin
   },
   thumb: {
     width: 100,

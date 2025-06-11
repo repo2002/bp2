@@ -309,9 +309,7 @@ export default function EventDetailsScreen() {
                 styles.topRightButton,
                 { backgroundColor: theme.colors.cardBackground },
               ]}
-              onPress={() => {
-                /* open settings modal */
-              }}
+              onPress={() => {}}
             >
               <Ionicons
                 name="settings-outline"
