@@ -314,12 +314,16 @@ export default function CarpoolDetailsScreen() {
           )}
         </View>
         {/* Driver Info */}
+
         <View
           style={[
             styles.section,
-            { backgroundColor: theme.colors.cardBackground },
+            { backgroundColor: theme.colors.cardBackground, gap: 12 },
           ]}
         >
+          <ThemeText style={{ fontSize: 20, fontWeight: "bold" }}>
+            {carpool.title}
+          </ThemeText>
           <View
             style={[
               styles.driverInfo,
