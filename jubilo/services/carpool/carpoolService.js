@@ -37,8 +37,12 @@ export const carpoolService = {
       `
       )
       .eq("status", status)
-      .neq("driver_id", user.id) // Exclude user's own carpools
       .order("departure_time", { ascending: true });
+
+    // Only exclude user's own carpools if not filtering by event_id
+    if (!otherFilters.event_id) {
+      query = query.neq("driver_id", user.id);
+    }
 
     // Apply additional filters
     Object.entries(otherFilters).forEach(([key, value]) => {

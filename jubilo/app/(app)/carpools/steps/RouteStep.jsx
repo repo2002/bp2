@@ -1,11 +1,20 @@
 import RouteMap from "@/components/carpool/RouteMap";
+import EventCardMedium from "@/components/events/EventCardMedium";
 import LocationPickerBottomSheet from "@/components/LocationPickerBottomSheet";
 import ThemeText from "@/components/theme/ThemeText";
 import { useTheme } from "@/hooks/theme";
+import { getEvents } from "@/services/events";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useEffect, useRef, useState } from "react";
-import { TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  Switch,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function RouteStep({ form, setForm, onBack, onNext }) {
   const theme = useTheme();
@@ -14,6 +23,43 @@ export default function RouteStep({ form, setForm, onBack, onNext }) {
   const departureSheetRef = useRef();
   const destinationSheetRef = useRef();
   const [routeDuration, setRouteDuration] = useState(null);
+
+  // Event logic
+  const [isForEvent, setIsForEvent] = useState(!!form.event_id);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [events, setEvents] = useState([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+
+  useEffect(() => {
+    if (isForEvent && events.length === 0) {
+      setLoadingEvents(true);
+      getEvents({ limit: 50, status: "upcoming" })
+        .then((res) => setEvents(res.events || []))
+        .finally(() => setLoadingEvents(false));
+    }
+  }, [isForEvent]);
+
+  // When event is picked, set event_id and destination_location
+  const handleEventSelect = (event) => {
+    setForm((f) => ({
+      ...f,
+      event_id: event.id,
+      destination_location: {
+        address: event.location.address,
+        latitude: event.location.lat,
+        longitude: event.location.lng,
+        description: event.location.address,
+      },
+    }));
+    setShowEventModal(false);
+  };
+
+  // If user toggles off event, clear event_id and allow destination editing
+  useEffect(() => {
+    if (!isForEvent) {
+      setForm((f) => ({ ...f, event_id: null }));
+    }
+  }, [isForEvent]);
 
   const isValid =
     form.departure_location &&
@@ -75,6 +121,129 @@ export default function RouteStep({ form, setForm, onBack, onNext }) {
           paddingBottom: 80,
         }}
       >
+        {/* Carpool for Event Switch */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginBottom: 16,
+          }}
+        >
+          <Ionicons
+            name="calendar"
+            size={20}
+            color={theme.colors.primary}
+            style={{ marginRight: 10 }}
+          />
+          <ThemeText style={{ fontSize: 16, marginRight: 10 }}>
+            Is this carpool for an event?
+          </ThemeText>
+          <Switch
+            value={isForEvent}
+            onValueChange={setIsForEvent}
+            thumbColor={isForEvent ? theme.colors.primary : theme.colors.grey}
+            trackColor={{
+              true: theme.colors.grey,
+              false: theme.colors.greyLight,
+            }}
+          />
+        </View>
+        {/* Event Picker */}
+        {isForEvent && (
+          <TouchableOpacity
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              borderRadius: 10,
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              backgroundColor: theme.colors.cardBackground,
+              marginBottom: 12,
+            }}
+            onPress={() => setShowEventModal(true)}
+          >
+            <Ionicons
+              name="calendar-outline"
+              size={20}
+              color={theme.colors.primary}
+              style={{ marginRight: 8 }}
+            />
+            <ThemeText style={{ color: theme.colors.text, fontSize: 16 }}>
+              {form.event_id
+                ? events.find((e) => e.id === form.event_id)?.title ||
+                  "Select Event"
+                : "Select Event"}
+            </ThemeText>
+          </TouchableOpacity>
+        )}
+        {/* Event Modal */}
+        <Modal
+          visible={showEventModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowEventModal(false)}
+        >
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "flex-end",
+              backgroundColor: "rgba(0,0,0,0.4)", // semi-transparent overlay
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: theme.colors.background,
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                padding: 16,
+                maxHeight: "70%",
+                height: "70%",
+                width: "100%",
+                alignSelf: "center",
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
+                }}
+              >
+                <ThemeText style={{ fontSize: 18, fontWeight: "bold" }}>
+                  Select Event
+                </ThemeText>
+                <TouchableOpacity onPress={() => setShowEventModal(false)}>
+                  <Ionicons name="close" size={28} color={theme.colors.text} />
+                </TouchableOpacity>
+              </View>
+              {loadingEvents ? (
+                <ActivityIndicator
+                  size="large"
+                  color={theme.colors.primary}
+                  style={{ marginTop: 32 }}
+                />
+              ) : (
+                <FlatList
+                  data={events}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <EventCardMedium
+                      event={item}
+                      onPress={() => handleEventSelect(item)}
+                    />
+                  )}
+                  ListEmptyComponent={
+                    <ThemeText style={{ textAlign: "center", marginTop: 32 }}>
+                      No events found.
+                    </ThemeText>
+                  }
+                  showsVerticalScrollIndicator={false}
+                />
+              )}
+            </View>
+          </View>
+        </Modal>
         {/* Departure Time */}
         <View
           style={{
@@ -206,8 +375,12 @@ export default function RouteStep({ form, setForm, onBack, onNext }) {
               paddingVertical: 10,
               paddingHorizontal: 12,
               backgroundColor: theme.colors.cardBackground,
+              opacity: isForEvent ? 0.5 : 1,
             }}
-            onPress={() => destinationSheetRef.current?.open()}
+            onPress={() => {
+              if (!isForEvent) destinationSheetRef.current?.open();
+            }}
+            disabled={isForEvent}
           >
             <MaterialCommunityIcons
               name="map-marker-outline"

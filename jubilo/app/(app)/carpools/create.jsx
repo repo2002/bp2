@@ -110,6 +110,7 @@ const CreateCarpoolScreen = () => {
         is_private: form.is_private,
         is_recurring: form.is_recurring,
         recurrence_rule: form.is_recurring ? form.recurrence_rule : null,
+        event_id: form.event_id,
       });
       router.back();
     } catch (e) {

@@ -70,6 +70,9 @@ const CarpoolList = ({ carpools, onCarpoolPress }) => {
               style={{ borderTopLeftRadius: 12, borderTopRightRadius: 12 }}
             />
             <View style={{ padding: 16 }}>
+              <ThemeText color={theme.colors.text} style={{ fontSize: 16 }}>
+                {carpool.title}
+              </ThemeText>
               {/* Price Row */}
               <View
                 style={{

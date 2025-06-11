@@ -105,9 +105,13 @@ export default function CarpoolScreen() {
       case "myCars":
         return <CarList cars={cars} onCarPress={handleCarPress} />;
       default:
+        // Sort carpools by created_at descending
+        const sortedCarpools = [...carpools].sort(
+          (a, b) => new Date(b.created_at) - new Date(a.created_at)
+        );
         return (
           <CarpoolList
-            carpools={carpools}
+            carpools={sortedCarpools}
             onCarpoolPress={handleCarpoolPress}
           />
         );

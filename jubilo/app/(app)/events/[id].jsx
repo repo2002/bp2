@@ -12,6 +12,7 @@ import { useEventDetails } from "@/hooks/events/useEventDetails";
 import { useEventParticipants } from "@/hooks/events/useEventParticipants";
 import { useEventQnA } from "@/hooks/events/useEventQnA";
 import { useTheme } from "@/hooks/theme";
+import { carpoolService } from "@/services/carpool/carpoolService";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -41,12 +42,15 @@ export default function EventDetailsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const mountedRef = useRef(true);
   const refreshTimeoutRef = useRef(null);
+  const [carpools, setCarpools] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Use new hooks
   const {
     event,
     loading,
-    error,
+    error: eventError,
     updateEvent,
     joinEvent,
     leaveEvent,
@@ -129,6 +133,10 @@ export default function EventDetailsScreen() {
     }
   }, [event, navigation]);
 
+  useEffect(() => {
+    fetchCarpools();
+  }, [id]);
+
   // Join/Leave handlers with better error handling
   const handleJoin = async () => {
     if (!mountedRef.current) return;
@@ -177,6 +185,20 @@ export default function EventDetailsScreen() {
   const showInviteSection =
     event && user && event.creator_id === user.id && event.is_private;
 
+  const fetchCarpools = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await carpoolService.getCarpools({ event_id: id });
+      setCarpools(data || []);
+    } catch (err) {
+      console.error("Error fetching carpools:", err);
+      setError(err.message || "Failed to fetch carpools");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <View
@@ -190,7 +212,7 @@ export default function EventDetailsScreen() {
     );
   }
 
-  if (error) {
+  if (eventError) {
     return (
       <View
         style={[
@@ -198,7 +220,9 @@ export default function EventDetailsScreen() {
           { backgroundColor: theme.colors.background },
         ]}
       >
-        <ThemeText style={{ color: theme.colors.error }}>{error}</ThemeText>
+        <ThemeText style={{ color: theme.colors.error }}>
+          {eventError}
+        </ThemeText>
         <TouchableOpacity
           style={[
             styles.retryButton,
@@ -704,6 +728,118 @@ export default function EventDetailsScreen() {
             )}
           </View>
         </View>
+
+        {/* Carpools Section */}
+        <View style={{ width: "100%", marginTop: 8 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 16,
+              marginBottom: 4,
+            }}
+          >
+            <ThemeText
+              style={{
+                fontWeight: "bold",
+                fontSize: 16,
+                color: theme.colors.text,
+              }}
+            >
+              Available Carpools
+            </ThemeText>
+            <TouchableOpacity
+              onPress={() => router.push(`/carpools/new?event_id=${id}`)}
+            >
+              <ThemeText
+                color={theme.colors.primary}
+                style={{ fontWeight: "bold" }}
+              >
+                Create Carpool
+              </ThemeText>
+            </TouchableOpacity>
+          </View>
+          {isLoading ? (
+            <ActivityIndicator
+              size="small"
+              color={theme.colors.primary}
+              style={{ marginTop: 16 }}
+            />
+          ) : error ? (
+            <ThemeText
+              style={{ paddingHorizontal: 16, color: theme.colors.error }}
+            >
+              {error}
+            </ThemeText>
+          ) : carpools.length === 0 ? (
+            <ThemeText
+              style={{ paddingHorizontal: 16, color: theme.colors.text }}
+            >
+              No carpools available yet
+            </ThemeText>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ paddingLeft: 16, paddingBottom: 8 }}
+            >
+              {carpools.map((carpool) => (
+                <TouchableOpacity
+                  key={carpool.id}
+                  onPress={() => router.push(`/carpools/${carpool.id}`)}
+                  style={{ marginRight: 12 }}
+                >
+                  <View
+                    style={[
+                      styles.carpoolCard,
+                      { backgroundColor: theme.colors.cardBackground },
+                    ]}
+                  >
+                    <View style={styles.carpoolHeader}>
+                      <Avatar uri={carpool.driver?.image_url} size={32} />
+                      <View style={styles.carpoolInfo}>
+                        <ThemeText style={styles.carpoolDriver}>
+                          {carpool.driver?.first_name}{" "}
+                          {carpool.driver?.last_name}
+                        </ThemeText>
+                        <ThemeText style={styles.carpoolSeats}>
+                          {carpool.max_seats -
+                            (carpool.passengers?.length || 0)}{" "}
+                          seats left
+                        </ThemeText>
+                      </View>
+                    </View>
+                    <View style={styles.carpoolDetails}>
+                      <View style={styles.carpoolTime}>
+                        <Ionicons
+                          name="time-outline"
+                          size={16}
+                          color={theme.colors.primary}
+                        />
+                        <ThemeText style={styles.carpoolTimeText}>
+                          {new Date(
+                            carpool.departure_time
+                          ).toLocaleTimeString()}
+                        </ThemeText>
+                      </View>
+                      <ThemeText
+                        color={
+                          carpool.price
+                            ? theme.colors.primary
+                            : theme.colors.text
+                        }
+                        style={styles.carpoolPrice}
+                      >
+                        {carpool.price ? `€${carpool.price}` : "Free"}
+                      </ThemeText>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
       </ScrollView>
       {/* Images BottomSheet */}
       <EventImagesBottomSheet
@@ -961,5 +1097,45 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
     color: "#888",
+  },
+  carpoolCard: {
+    width: 200,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  carpoolHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  carpoolInfo: {
+    marginLeft: 8,
+    flex: 1,
+  },
+  carpoolDriver: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  carpoolSeats: {
+    fontSize: 12,
+    color: "#666",
+  },
+  carpoolDetails: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  carpoolTime: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  carpoolTimeText: {
+    marginLeft: 4,
+    fontSize: 12,
+  },
+  carpoolPrice: {
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

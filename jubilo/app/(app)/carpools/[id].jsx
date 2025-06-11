@@ -20,6 +20,14 @@ import {
   View,
 } from "react-native";
 
+// Add a safe date formatting helper
+const safeFormatDate = (date) => {
+  if (!date) return "-";
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return "-";
+  return format(d, "MMM d, h:mm a");
+};
+
 export default function CarpoolDetailsScreen() {
   const theme = useTheme();
   const { user } = useAuth();
@@ -380,9 +388,7 @@ export default function CarpoolDetailsScreen() {
                     carpool.departure_location?.address}
                 </ThemeText>
                 <ThemeText color={theme.colors.grey}>
-                  {carpool.departure_time
-                    ? format(new Date(carpool.departure_time), "MMM d, h:mm a")
-                    : "-"}
+                  {safeFormatDate(carpool.departure_time)}
                 </ThemeText>
               </View>
             </View>
@@ -401,12 +407,7 @@ export default function CarpoolDetailsScreen() {
                     carpool.destination_location?.address}
                 </ThemeText>
                 <ThemeText color={theme.colors.grey}>
-                  {carpool.destination_time
-                    ? format(
-                        new Date(carpool.destination_time),
-                        "MMM d, h:mm a"
-                      )
-                    : "-"}
+                  {safeFormatDate(carpool.destination_time)}
                 </ThemeText>
               </View>
             </View>
@@ -436,7 +437,7 @@ export default function CarpoolDetailsScreen() {
                   {carpool.event_title}
                 </ThemeText>
                 <ThemeText color={theme.colors.grey}>
-                  {format(new Date(carpool.event_time), "MMM d, h:mm a")}
+                  {safeFormatDate(carpool.event_time)}
                 </ThemeText>
               </View>
               <Ionicons

@@ -1,7 +1,9 @@
 import ThemeText from "@/components/theme/ThemeText";
 import { useTheme } from "@/hooks/theme";
+import { getEvents } from "@/services/events";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { format } from "date-fns";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -84,6 +86,31 @@ export default function SummaryStep({
   error,
 }) {
   const theme = useTheme();
+  const [eventDetails, setEventDetails] = useState(null);
+  const [eventLoading, setEventLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchEvent = async () => {
+      if (form.event_id) {
+        setEventLoading(true);
+        try {
+          // Use getEvents to fetch a single event by ID
+          const { events } = await getEvents({ limit: 1 });
+          // If you have a getEventDetails function, use that instead
+          // const event = await getEventDetails(form.event_id);
+          // setEventDetails(event);
+          // For now, fallback to searching in the fetched events
+          const event = events.find((e) => e.id === form.event_id);
+          setEventDetails(event);
+        } catch (e) {
+          setEventDetails(null);
+        } finally {
+          setEventLoading(false);
+        }
+      }
+    };
+    fetchEvent();
+  }, [form.event_id]);
 
   const formatDateTime = (date) => {
     if (!date) return "-";
@@ -150,28 +177,47 @@ export default function SummaryStep({
               />
             }
           >
-            <InfoRow
-              icon={
-                <Ionicons
-                  name="calendar-outline"
-                  size={20}
-                  color={theme.colors.primary}
+            {eventLoading ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+            ) : eventDetails ? (
+              <>
+                <InfoRow
+                  icon={
+                    <Ionicons
+                      name="calendar-outline"
+                      size={20}
+                      color={theme.colors.primary}
+                    />
+                  }
+                  label="Event"
+                  value={eventDetails.title}
                 />
-              }
-              label="Event"
-              value={form.event_title}
-            />
-            <InfoRow
-              icon={
-                <Ionicons
-                  name="time-outline"
-                  size={20}
-                  color={theme.colors.primary}
+                <InfoRow
+                  icon={
+                    <Ionicons
+                      name="time-outline"
+                      size={20}
+                      color={theme.colors.primary}
+                    />
+                  }
+                  label="Event Time"
+                  value={formatDateTime(eventDetails.start_time)}
                 />
-              }
-              label="Event Time"
-              value={formatDateTime(form.event_time)}
-            />
+                <InfoRow
+                  icon={
+                    <Ionicons
+                      name="location-outline"
+                      size={20}
+                      color={theme.colors.primary}
+                    />
+                  }
+                  label="Location"
+                  value={eventDetails.location?.address || "-"}
+                />
+              </>
+            ) : (
+              <ThemeText color={theme.colors.error}>Event not found</ThemeText>
+            )}
           </Section>
         )}
 

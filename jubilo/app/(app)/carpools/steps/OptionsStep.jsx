@@ -1,10 +1,8 @@
 import ThemeText from "@/components/theme/ThemeText";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/theme";
-import { supabase } from "@/lib/supabase";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { format } from "date-fns";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Modal,
   ScrollView,
@@ -33,8 +31,7 @@ export default function OptionsStep({ form, setForm, onBack, onNext }) {
   const theme = useTheme();
   const { user } = useAuth();
   const [showRecurringModal, setShowRecurringModal] = useState(false);
-  const [showEventModal, setShowEventModal] = useState(false);
-  const [userEvents, setUserEvents] = useState([]);
+
   const [selectedDays, setSelectedDays] = useState(
     form.recurrence_rule?.split(";")[1]?.replace("BYDAY=", "").split(",") || []
   );
@@ -43,36 +40,6 @@ export default function OptionsStep({ form, setForm, onBack, onNext }) {
   );
 
   const isValid = true;
-
-  useEffect(() => {
-    fetchUserEvents();
-  }, []);
-
-  const fetchUserEvents = async () => {
-    try {
-      const { data: events, error } = await supabase
-        .from("event_participants")
-        .select(
-          `
-          event:events (
-            id,
-            title,
-            start_time,
-            end_time,
-            location
-          )
-        `
-        )
-        .eq("user_id", user.id)
-        .eq("status", "going");
-
-      if (error) throw error;
-
-      setUserEvents(events.map((e) => e.event));
-    } catch (error) {
-      console.error("Error fetching user events:", error);
-    }
-  };
 
   const handleDayToggle = (dayId) => {
     setSelectedDays((prev) =>
@@ -96,16 +63,6 @@ export default function OptionsStep({ form, setForm, onBack, onNext }) {
     setShowRecurringModal(false);
   };
 
-  const handleEventSelect = (event) => {
-    setForm((f) => ({
-      ...f,
-      event_id: event.id,
-      event_title: event.title,
-      event_time: event.start_time,
-    }));
-    setShowEventModal(false);
-  };
-
   const getRecurringDisplayText = () => {
     if (!form.is_recurring || !form.recurrence_rule) return "Select schedule";
 
@@ -118,16 +75,6 @@ export default function OptionsStep({ form, setForm, onBack, onNext }) {
       .join(", ");
 
     return `${frequency}: ${days}`;
-  };
-
-  const getEventDisplayText = () => {
-    if (!form.event_id) return "Select event";
-    const event = userEvents.find((e) => e.id === form.event_id);
-    if (!event) return "Select event";
-    return `${event.title} (${format(
-      new Date(event.start_time),
-      "MMM d, h:mm a"
-    )})`;
   };
 
   const getLocationText = (location) => {
@@ -161,40 +108,6 @@ export default function OptionsStep({ form, setForm, onBack, onNext }) {
           paddingBottom: 80,
         }}
       >
-        {/* Event Selection */}
-        <TouchableOpacity
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 16,
-            padding: 12,
-            backgroundColor: theme.colors.cardBackground,
-            borderRadius: 10,
-          }}
-          onPress={() => setShowEventModal(true)}
-        >
-          <Ionicons
-            name="calendar"
-            size={20}
-            color={theme.colors.primary}
-            style={{ marginRight: 10 }}
-          />
-          <ThemeText
-            style={{
-              flex: 1,
-              fontSize: 16,
-              color: form.event_id ? theme.colors.text : theme.colors.grey,
-            }}
-          >
-            {getEventDisplayText()}
-          </ThemeText>
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color={theme.colors.grey}
-          />
-        </TouchableOpacity>
-
         {/* Private Carpool */}
         <View
           style={{
@@ -224,35 +137,37 @@ export default function OptionsStep({ form, setForm, onBack, onNext }) {
           />
         </View>
         {/* Recurring */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 16,
-          }}
-        >
-          <MaterialCommunityIcons
-            name="calendar-refresh"
-            size={20}
-            color={theme.colors.primary}
-            style={{ marginRight: 10 }}
-          />
-          <ThemeText
-            style={{ flex: 1, fontSize: 16, color: theme.colors.text }}
-          >
-            Recurring
-          </ThemeText>
-          <Switch
-            value={form.is_recurring}
-            onValueChange={(v) => setForm((f) => ({ ...f, is_recurring: v }))}
-            trackColor={{
-              false: theme.colors.greyLight,
-              true: theme.colors.primary,
+        {!form.event_id && (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: 16,
             }}
-          />
-        </View>
+          >
+            <MaterialCommunityIcons
+              name="calendar-refresh"
+              size={20}
+              color={theme.colors.primary}
+              style={{ marginRight: 10 }}
+            />
+            <ThemeText
+              style={{ flex: 1, fontSize: 16, color: theme.colors.text }}
+            >
+              Recurring
+            </ThemeText>
+            <Switch
+              value={form.is_recurring}
+              onValueChange={(v) => setForm((f) => ({ ...f, is_recurring: v }))}
+              trackColor={{
+                false: theme.colors.greyLight,
+                true: theme.colors.primary,
+              }}
+            />
+          </View>
+        )}
         {/* Recurring Schedule */}
-        {form.is_recurring && (
+        {!form.event_id && form.is_recurring && (
           <TouchableOpacity
             style={{
               flexDirection: "row",
@@ -263,6 +178,7 @@ export default function OptionsStep({ form, setForm, onBack, onNext }) {
               borderRadius: 10,
             }}
             onPress={() => setShowRecurringModal(true)}
+            activeOpacity={0.8}
           >
             <MaterialCommunityIcons
               name="repeat"
@@ -289,93 +205,6 @@ export default function OptionsStep({ form, setForm, onBack, onNext }) {
           </TouchableOpacity>
         )}
       </View>
-
-      {/* Event Selection Modal */}
-      <Modal visible={showEventModal} animationType="slide" transparent={true}>
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            justifyContent: "flex-end",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: theme.colors.background,
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              padding: 16,
-              maxHeight: "80%",
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 20,
-              }}
-            >
-              <ThemeText style={{ fontSize: 20, fontWeight: "600" }}>
-                Select Event
-              </ThemeText>
-              <TouchableOpacity onPress={() => setShowEventModal(false)}>
-                <Ionicons name="close" size={24} color={theme.colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ marginBottom: 20 }}>
-              {userEvents.map((event) => (
-                <TouchableOpacity
-                  key={event.id}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingVertical: 12,
-                    paddingHorizontal: 8,
-                    borderBottomWidth: 1,
-                    borderBottomColor: theme.colors.greyLight,
-                  }}
-                  onPress={() => handleEventSelect(event)}
-                >
-                  <View style={{ flex: 1 }}>
-                    <ThemeText style={{ fontSize: 16, fontWeight: "500" }}>
-                      {event.title}
-                    </ThemeText>
-                    <ThemeText
-                      style={{
-                        fontSize: 14,
-                        color: theme.colors.grey,
-                        marginTop: 4,
-                      }}
-                    >
-                      {format(new Date(event.start_time), "MMM d, h:mm a")}
-                    </ThemeText>
-                    {event.location && (
-                      <ThemeText
-                        style={{
-                          fontSize: 14,
-                          color: theme.colors.grey,
-                          marginTop: 2,
-                        }}
-                      >
-                        {getLocationText(event.location)}
-                      </ThemeText>
-                    )}
-                  </View>
-                  {form.event_id === event.id && (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={24}
-                      color={theme.colors.primary}
-                    />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
       {/* Recurring Schedule Modal */}
       <Modal
@@ -542,6 +371,7 @@ export default function OptionsStep({ form, setForm, onBack, onNext }) {
           bottom: 0,
           left: 0,
           right: 0,
+          gap: 10,
           flexDirection: "row",
           justifyContent: "space-between",
           padding: 16,
@@ -554,6 +384,7 @@ export default function OptionsStep({ form, setForm, onBack, onNext }) {
           style={{
             padding: 12,
             borderRadius: 8,
+            flex: 1,
             backgroundColor: theme.colors.grey,
           }}
           onPress={onBack}
@@ -563,6 +394,7 @@ export default function OptionsStep({ form, setForm, onBack, onNext }) {
         <TouchableOpacity
           style={{
             padding: 12,
+            flex: 1,
             borderRadius: 8,
             backgroundColor: isValid ? theme.colors.primary : theme.colors.grey,
             opacity: isValid ? 1 : 0.5,
