@@ -8,7 +8,7 @@ import EventInviteUserList from "./EventInviteUserList";
 export default function EventInviteStep({ eventId, inviterId, isPrivate }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [invitedUserIds, setInvitedUserIds] = useState([]);
+  const [invitationStatuses, setInvitationStatuses] = useState({});
 
   useEffect(() => {
     if (!isPrivate) return;
@@ -24,14 +24,18 @@ export default function EventInviteStep({ eventId, inviterId, isPrivate }) {
           .from("event_invitations")
           .select("user_id, status")
           .eq("event_id", eventId);
-        const invitedIds = (invitations || [])
-          .filter((inv) => inv.status === "pending")
-          .map((inv) => inv.user_id);
-        setInvitedUserIds(invitedIds);
+
+        // Create a map of user IDs to their invitation statuses
+        const statusMap = {};
+        (invitations || []).forEach((inv) => {
+          statusMap[inv.user_id] = inv.status;
+        });
+
+        setInvitationStatuses(statusMap);
         setUsers(profiles || []);
       } else {
         setUsers([]);
-        setInvitedUserIds([]);
+        setInvitationStatuses({});
       }
       setLoading(false);
     });
@@ -44,7 +48,11 @@ export default function EventInviteStep({ eventId, inviterId, isPrivate }) {
         inviteeId: user.id,
         inviterId,
       });
-      setInvitedUserIds((ids) => [...ids, user.id]);
+      // Update the invitation status to pending
+      setInvitationStatuses((prev) => ({
+        ...prev,
+        [user.id]: "pending",
+      }));
     } catch (e) {
       console.error("Error inviting user:", e);
     }
@@ -67,7 +75,7 @@ export default function EventInviteStep({ eventId, inviterId, isPrivate }) {
       <EventInviteUserList
         users={users}
         onInvite={handleInvite}
-        invitedUserIds={invitedUserIds}
+        invitationStatuses={invitationStatuses}
       />
     </View>
   );

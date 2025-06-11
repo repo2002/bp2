@@ -1,4 +1,5 @@
 import Avatar from "@/components/Avatar";
+import { useTheme } from "@/hooks/theme";
 import {
   FlatList,
   StyleSheet,
@@ -11,25 +12,61 @@ export default function EventInviteUserList({
   users,
   onInvite,
   invitedUserIds = [],
+  invitationStatuses = {},
 }) {
+  const theme = useTheme();
+
+  const renderInvitationStatus = (userId) => {
+    const status = invitationStatuses[userId];
+    if (!status) return null;
+
+    switch (status) {
+      case "accepted":
+        return (
+          <Text style={{ color: theme.colors.success, fontWeight: "bold" }}>
+            Accepted
+          </Text>
+        );
+      case "rejected":
+        return (
+          <Text style={{ color: theme.colors.error, fontWeight: "bold" }}>
+            Declined
+          </Text>
+        );
+      case "pending":
+        return (
+          <Text style={{ color: theme.colors.warning, fontWeight: "bold" }}>
+            Invited
+          </Text>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <FlatList
       data={users}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => (
-        <View style={styles.row}>
+        <View style={[styles.row, { borderColor: theme.colors.gey }]}>
           <Avatar size={40} uri={item.image_url} />
           <View style={styles.nameContainer}>
-            <Text style={styles.username}>{item.username}</Text>
-            <Text style={styles.name}>
+            <Text style={[styles.username, { color: theme.colors.text }]}>
+              {item.username}
+            </Text>
+            <Text style={[styles.name, { color: theme.colors.grey }]}>
               {item.first_name} {item.last_name}
             </Text>
           </View>
-          {invitedUserIds.includes(item.id) ? (
-            <Text style={styles.invited}>Invited</Text>
+          {invitationStatuses[item.id] ? (
+            renderInvitationStatus(item.id)
           ) : (
             <TouchableOpacity
-              style={styles.inviteBtn}
+              style={[
+                styles.inviteBtn,
+                { backgroundColor: theme.colors.primary },
+              ]}
               onPress={() => onInvite(item)}
             >
               <Text style={styles.inviteText}>Invite</Text>
@@ -37,7 +74,11 @@ export default function EventInviteUserList({
           )}
         </View>
       )}
-      ListEmptyComponent={<Text style={styles.empty}>No users to invite.</Text>}
+      ListEmptyComponent={
+        <Text style={[styles.empty, { color: theme.colors.grey }]}>
+          No users to invite.
+        </Text>
+      }
     />
   );
 }
@@ -48,7 +89,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 10,
     borderBottomWidth: 1,
-    borderColor: "#333",
   },
   nameContainer: {
     flex: 1,
@@ -57,15 +97,12 @@ const styles = StyleSheet.create({
   },
   username: {
     flex: 1,
-    color: "#fff",
     fontSize: 16,
   },
   name: {
-    color: "#aaa",
     fontSize: 14,
   },
   inviteBtn: {
-    backgroundColor: "#4A90E2",
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 6,
@@ -74,12 +111,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
   },
-  invited: {
-    color: "#4CAF50",
-    fontWeight: "bold",
-  },
   empty: {
-    color: "#aaa",
     textAlign: "center",
     marginTop: 20,
   },

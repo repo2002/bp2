@@ -1,4 +1,5 @@
 import Avatar from "@/components/Avatar";
+import { useTheme } from "@/hooks/theme";
 import { useState } from "react";
 import {
   FlatList,
@@ -19,22 +20,31 @@ export default function EventParticipantsModal({
   isPrivate,
   isOwner,
 }) {
+  const theme = useTheme();
   const [showInvite, setShowInvite] = useState(false);
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={styles.container}>
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
         <View style={styles.header}>
-          <Text style={styles.title}>Participants</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>
+            Participants
+          </Text>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-            <Text style={styles.closeText}>✕</Text>
+            <Text style={[styles.closeText, { color: theme.colors.text }]}>
+              ✕
+            </Text>
           </TouchableOpacity>
           {isOwner && isPrivate && !showInvite && (
             <TouchableOpacity
               onPress={() => setShowInvite(true)}
               style={styles.plusBtn}
             >
-              <Text style={styles.plusText}>＋</Text>
+              <Text style={[styles.plusText, { color: theme.colors.primary }]}>
+                ＋
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -49,18 +59,22 @@ export default function EventParticipantsModal({
             data={participants}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <View style={styles.row}>
+              <View style={[styles.row, { borderColor: theme.colors.grey }]}>
                 <Avatar size={40} uri={item.user.image_url} />
                 <View style={styles.nameContainer}>
-                  <Text style={styles.username}>{item.user.username}</Text>
-                  <Text style={styles.name}>
+                  <Text style={[styles.username, { color: theme.colors.text }]}>
+                    {item.user.username}
+                  </Text>
+                  <Text style={[styles.name, { color: theme.colors.grey }]}>
                     {item.user.first_name} {item.user.last_name}
                   </Text>
                 </View>
               </View>
             )}
             ListEmptyComponent={
-              <Text style={styles.empty}>No participants yet.</Text>
+              <Text style={[styles.empty, { color: theme.colors.grey }]}>
+                No participants yet.
+              </Text>
             }
           />
         )}
@@ -72,7 +86,6 @@ export default function EventParticipantsModal({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#181818",
     paddingTop: 40,
     paddingHorizontal: 16,
   },
@@ -83,7 +96,6 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    color: "#fff",
     fontWeight: "bold",
     fontSize: 22,
   },
@@ -91,7 +103,6 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   closeText: {
-    color: "#fff",
     fontSize: 22,
   },
   plusBtn: {
@@ -99,7 +110,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   plusText: {
-    color: "#4A90E2",
     fontSize: 28,
     fontWeight: "bold",
   },
@@ -108,17 +118,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderColor: "#333",
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 10,
-  },
-  name: {
-    color: "#fff",
-    fontSize: 16,
   },
   nameContainer: {
     flex: 1,
@@ -126,11 +125,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   username: {
-    color: "#fff",
+    fontSize: 16,
+  },
+  name: {
     fontSize: 16,
   },
   empty: {
-    color: "#aaa",
     textAlign: "center",
     marginTop: 20,
   },

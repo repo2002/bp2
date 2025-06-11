@@ -84,18 +84,20 @@ export default function CreateEventScreen() {
         allowsEditing: true,
         aspect: [16, 9],
         quality: 0.8,
+        exif: false, // Disable EXIF data to reduce file size
       });
 
-      if (!result.canceled) {
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const selectedAsset = result.assets[0];
         setSelectedImage({
-          uri: result.assets[0].uri,
-          width: result.assets[0].width,
-          height: result.assets[0].height,
+          uri: selectedAsset.uri,
+          width: selectedAsset.width || 0,
+          height: selectedAsset.height || 0,
         });
       }
     } catch (error) {
       console.error("Error picking image:", error);
-      Alert.alert("Error", "Failed to pick image");
+      Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
 
@@ -128,7 +130,7 @@ export default function CreateEventScreen() {
       } = await supabase.auth.getUser();
 
       // Upload image if selected
-      if (selectedImage) {
+      if (selectedImage?.uri) {
         try {
           const { success, error } = await uploadEventImage(
             event.id,
