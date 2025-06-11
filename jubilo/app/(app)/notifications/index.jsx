@@ -1,18 +1,16 @@
 import LoadingIndicator from "@/components/LoadingIndicator";
-import NotificationRow from "@/components/NotificationRow";
-import SocialNotifications from "@/components/notifications/SocialNotifications";
+import AllNotifications from "@/components/notifications/AllNotifications";
 import ThemeText from "@/components/theme/ThemeText";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/hooks/theme";
 import useNotificationsSubscription from "@/hooks/useNotificationsSubscription";
 import { fetchNotifications } from "@/services/notificationService";
 import { getUserData } from "@/services/userService";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
-  FlatList,
   RefreshControl,
   StyleSheet,
   TouchableOpacity,
@@ -41,11 +39,6 @@ async function fetchReference(reference_type, reference_id) {
   }
 }
 
-const REFERENCE_TYPES = [
-  { key: "all", icon: "bell-outline" },
-  { key: "social", icon: "application" },
-];
-
 export default function NotificationsScreen() {
   const theme = useTheme();
   const { user } = useAuth();
@@ -53,19 +46,11 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedType, setSelectedType] = useState("all");
 
   const handleNotificationDelete = () => {
-    const title =
-      selectedType === "all"
-        ? "Delete All Notifications"
-        : `Delete All ${
-            selectedType.charAt(0).toUpperCase() + selectedType.slice(1)
-          } Notifications`;
-
     Alert.alert(
-      title,
-      "Are you sure you want to delete these notifications? This action cannot be undone.",
+      "Delete All Notifications",
+      "Are you sure you want to delete all notifications? This action cannot be undone.",
       [
         {
           text: "Cancel",
@@ -75,13 +60,7 @@ export default function NotificationsScreen() {
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            if (selectedType === "all") {
-              setNotifications([]);
-            } else {
-              setNotifications(
-                notifications.filter((n) => n.category !== selectedType)
-              );
-            }
+            setNotifications([]);
           },
         },
       ]
@@ -138,11 +117,6 @@ export default function NotificationsScreen() {
     setRefreshing(false);
   };
 
-  const filteredNotifications =
-    selectedType === "all"
-      ? notifications
-      : notifications.filter((n) => n.category === selectedType);
-
   if (loading) return <LoadingIndicator text="Loading notifications..." />;
 
   return (
@@ -170,7 +144,7 @@ export default function NotificationsScreen() {
               },
             ]}
           >
-            {selectedType} Notifications
+            Notifications
           </ThemeText>
           <TouchableOpacity onPress={handleNotificationDelete}>
             <Ionicons name="trash" size={24} color={theme.colors.error} />
@@ -178,75 +152,10 @@ export default function NotificationsScreen() {
         </View>
       </View>
 
-      <View style={styles.pickerContainer}>
-        <View
-          style={[
-            styles.segmentedControl,
-            { backgroundColor: theme.colors.background },
-          ]}
-        >
-          {REFERENCE_TYPES.map((type) => (
-            <TouchableOpacity
-              key={type.key}
-              style={[
-                styles.segment,
-                selectedType === type.key && {
-                  backgroundColor: theme.colors.text,
-                  shadowColor: "black",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 3.84,
-                  elevation: 3,
-                },
-              ]}
-              onPress={() => setSelectedType(type.key)}
-            >
-              <MaterialCommunityIcons
-                name={type.icon}
-                size={18}
-                color={
-                  selectedType === type.key
-                    ? theme.colors.invertedText
-                    : theme.colors.text
-                }
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      <FlatList
-        data={filteredNotifications}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
-          if (
-            item.category === "follow_request" ||
-            item.category === "like" ||
-            item.category === "comment"
-          ) {
-            return (
-              <SocialNotifications
-                notification={item}
-                sender={item.sender}
-                reference={item.reference}
-              />
-            );
-          }
-          return (
-            <NotificationRow
-              notification={item}
-              sender={item.sender}
-              reference={item.reference}
-            />
-          );
-        }}
+      <AllNotifications
+        notifications={notifications}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <ThemeText style={styles.emptyText}>No notifications yet</ThemeText>
-          </View>
         }
       />
     </View>
@@ -262,23 +171,8 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     paddingHorizontal: 16,
   },
-  segmentedControl: {
-    flexDirection: "row",
-  },
-  segment: {
+  title: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: "#666",
+    textAlign: "center",
   },
 });

@@ -5,6 +5,7 @@ import { getUserData } from "@/services/userService";
 import { useCallback, useEffect, useState } from "react";
 import useMessagesSubscription from "./useMessagesSubscription";
 
+//Expecting roomId and userId as Hook arguments!!
 export default function useChatRoom(roomId, userId) {
   const [room, setRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -15,7 +16,7 @@ export default function useChatRoom(roomId, userId) {
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [hasMore, setHasMore] = useState(true);
 
-  // Helper to transform a message to GiftedChat format, using cached user info
+  // Transform a message to GiftedChat format, using cached user info
   const transformMessage = useCallback(async (msg) => {
     let sender = msg.sender;
     if (sender) {
@@ -130,10 +131,9 @@ export default function useChatRoom(roomId, userId) {
         return updated;
       });
     }
-    // Optionally handle UPDATE and DELETE events here
+    //TODO: Handle UPDATE and DELETE
   });
 
-  // Load older messages
   const loadOlderMessages = async () => {
     if (loadingEarlier || !hasMore || messages.length === 0) return;
     setLoadingEarlier(true);
@@ -156,7 +156,7 @@ export default function useChatRoom(roomId, userId) {
         setHasMore(false);
       }
     } catch (err) {
-      // Optionally handle error
+      //TODO: Handle error
     } finally {
       setLoadingEarlier(false);
     }

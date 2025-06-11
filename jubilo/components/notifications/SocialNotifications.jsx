@@ -281,14 +281,13 @@ const styles = StyleSheet.create({
   container: {
     height: 80,
     flexDirection: "column",
-
     marginBottom: 4,
     marginTop: 4,
     borderBottomLeftRadius: 6,
     borderBottomRightRadius: 6,
     borderTopLeftRadius: 6,
     borderTopRightRadius: 6,
-    flex: 1,
+    minHeight: 80,
   },
   iconHeader: {
     borderTopLeftRadius: 6,

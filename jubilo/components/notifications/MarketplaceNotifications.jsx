@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 6,
     borderTopLeftRadius: 6,
     borderTopRightRadius: 6,
-    flex: 1,
+    minHeight: 80,
   },
   iconHeader: {
     borderTopLeftRadius: 6,

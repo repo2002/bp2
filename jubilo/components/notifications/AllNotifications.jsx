@@ -1,14 +1,15 @@
+import ThemeText from "@/components/theme/ThemeText";
 import { useTheme } from "@/hooks/theme";
-import { StyleSheet, View } from "react-native";
+import { FlatList, StyleSheet, View } from "react-native";
 import CarpoolNotifications from "./CarpoolNotifications";
 import EventNotifications from "./EventNotifications";
 import MarketplaceNotifications from "./MarketplaceNotifications";
 import SocialNotifications from "./SocialNotifications";
 
-const AllNotifications = ({ notifications = [], onPress }) => {
+const AllNotifications = ({ notifications = [], refreshControl }) => {
   const theme = useTheme();
 
-  const renderNotification = (notification) => {
+  const renderNotification = ({ item: notification }) => {
     const sender = notification.sender;
     const reference = notification.reference;
 
@@ -23,7 +24,6 @@ const AllNotifications = ({ notifications = [], onPress }) => {
           notification={notification}
           sender={sender}
           reference={reference}
-          onPress={onPress}
         />
       );
     } else if (notification.reference_type === "event") {
@@ -33,7 +33,6 @@ const AllNotifications = ({ notifications = [], onPress }) => {
           notification={notification}
           sender={sender}
           reference={reference}
-          onPress={onPress}
         />
       );
     } else if (notification.reference_type === "marketplace") {
@@ -43,7 +42,6 @@ const AllNotifications = ({ notifications = [], onPress }) => {
           notification={notification}
           sender={sender}
           reference={reference}
-          onPress={onPress}
         />
       );
     } else if (notification.reference_type === "carpool") {
@@ -53,7 +51,6 @@ const AllNotifications = ({ notifications = [], onPress }) => {
           notification={notification}
           sender={sender}
           reference={reference}
-          onPress={onPress}
         />
       );
     }
@@ -64,7 +61,6 @@ const AllNotifications = ({ notifications = [], onPress }) => {
         notification={notification}
         sender={sender}
         reference={reference}
-        onPress={onPress}
       />
     );
   };
@@ -73,26 +69,26 @@ const AllNotifications = ({ notifications = [], onPress }) => {
     return (
       <View
         style={[
-          styles.container,
+          styles.emptyContainer,
           {
             backgroundColor: theme.colors.background,
           },
         ]}
-      />
+      >
+        <ThemeText style={styles.emptyText}>No notifications yet</ThemeText>
+      </View>
     );
   }
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: theme.colors.background,
-        },
-      ]}
-    >
-      {notifications.map(renderNotification)}
-    </View>
+    <FlatList
+      data={notifications}
+      renderItem={renderNotification}
+      keyExtractor={(item) => item.id}
+      refreshControl={refreshControl}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      contentContainerStyle={null}
+    />
   );
 };
 
@@ -100,7 +96,16 @@ export default AllNotifications;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     padding: 16,
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#666",
   },
 });

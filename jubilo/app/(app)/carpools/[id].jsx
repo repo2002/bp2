@@ -312,7 +312,12 @@ export default function CarpoolDetailsScreen() {
             { backgroundColor: theme.colors.cardBackground },
           ]}
         >
-          <View style={styles.driverInfo}>
+          <View
+            style={[
+              styles.driverInfo,
+              { flexDirection: "row", justifyContent: "space-between" },
+            ]}
+          >
             <UserChip
               user={carpool.driver}
               size={40}

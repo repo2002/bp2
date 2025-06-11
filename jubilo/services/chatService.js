@@ -227,6 +227,7 @@ export const createDirectChat = async (userId, otherUserId) => {
       updated_at: new Date().toISOString(),
     };
 
+    //TODO: remove debugging code before exams
     // First, verify we can read from the table
     const { data: testRead, error: testReadError } = await supabase
       .from("chat_rooms")
