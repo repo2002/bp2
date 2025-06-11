@@ -266,7 +266,7 @@ export default function EventDetailsScreen() {
             <Image
               source={{ uri: event.images[0].image_url }}
               style={styles.coverImage}
-              resizeMode="cover"
+              resizeMode="stretch"
               onError={(e) => {
                 console.error(
                   "Error loading cover image:",
@@ -376,13 +376,30 @@ export default function EventDetailsScreen() {
                 styles.acceptBtn,
                 { backgroundColor: theme.colors.success },
               ]}
-              onPress={() => {
-                // TODO: Implement accept invite logic
+              onPress={async () => {
+                setActionLoading(true);
+                try {
+                  const invitation = event.invitations?.find(
+                    (i) => i.user_id === user.id && i.status === "pending"
+                  );
+                  if (!invitation) {
+                    throw new Error("No pending invitation found");
+                  }
+                  await updateStatus("going");
+                  await refreshEvent();
+                } catch (error) {
+                  Alert.alert(
+                    "Error",
+                    error.message || "Failed to accept invitation"
+                  );
+                } finally {
+                  setActionLoading(false);
+                }
               }}
               disabled={actionLoading}
             >
               <ThemeText style={[styles.actionBtnText, { color: "#fff" }]}>
-                Accept
+                {actionLoading ? "Accepting..." : "Accept"}
               </ThemeText>
             </TouchableOpacity>
             <TouchableOpacity
@@ -390,13 +407,30 @@ export default function EventDetailsScreen() {
                 styles.declineBtn,
                 { backgroundColor: theme.colors.error, marginLeft: 8 },
               ]}
-              onPress={() => {
-                // TODO: Implement decline invite logic
+              onPress={async () => {
+                setActionLoading(true);
+                try {
+                  const invitation = event.invitations?.find(
+                    (i) => i.user_id === user.id && i.status === "pending"
+                  );
+                  if (!invitation) {
+                    throw new Error("No pending invitation found");
+                  }
+                  await updateStatus("not_going");
+                  await refreshEvent();
+                } catch (error) {
+                  Alert.alert(
+                    "Error",
+                    error.message || "Failed to decline invitation"
+                  );
+                } finally {
+                  setActionLoading(false);
+                }
               }}
               disabled={actionLoading}
             >
               <ThemeText style={[styles.actionBtnText, { color: "#fff" }]}>
-                Decline
+                {actionLoading ? "Declining..." : "Decline"}
               </ThemeText>
             </TouchableOpacity>
           </View>

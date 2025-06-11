@@ -57,7 +57,9 @@ export default function EventImagesBottomSheet({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [16, 9],
-        quality: 0.8,
+        quality: 0.5, // Reduced quality for faster upload
+        maxWidth: 1200, // Limit maximum width
+        maxHeight: 1200, // Limit maximum height
       });
 
       if (result.canceled) return;
@@ -68,17 +70,18 @@ export default function EventImagesBottomSheet({
       const fileName = `${Date.now()}.${fileExt}`;
       const filePath = `event-images/${eventId}/${fileName}`;
 
-      // Read the file as base64
+      // Read the file as base64 with compression
       const base64 = await FileSystem.readAsStringAsync(image.uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
-      // Upload to Supabase Storage
+      // Upload to Supabase Storage with cache control
       const { error: uploadError } = await supabase.storage
         .from("events")
         .upload(filePath, decode(base64), {
           contentType: `image/${fileExt}`,
           upsert: false,
+          cacheControl: "3600", // Cache for 1 hour
         });
 
       if (uploadError) {

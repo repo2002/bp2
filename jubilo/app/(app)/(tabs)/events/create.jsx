@@ -2,9 +2,9 @@ import { useTheme } from "@/hooks/theme";
 import { supabase } from "@/lib/supabase";
 import { createEvent, uploadEventImage } from "@/services/events";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { useRef, useState } from "react";
+import ImagePicker from "react-native-image-crop-picker";
 
 import LocationPickerBottomSheet from "@/components/LocationPickerBottomSheet";
 import ThemeText from "@/components/theme/ThemeText";
@@ -68,18 +68,22 @@ export default function CreateEventScreen() {
 
   const pickImage = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [16, 9],
+      const result = await ImagePicker.openPicker({
+        mediaType: "photo",
         quality: 0.8,
       });
 
-      if (!result.canceled) {
-        setSelectedImage(result.assets[0]);
+      if (result) {
+        setSelectedImage({
+          uri: result.path,
+          width: result.width,
+          height: result.height,
+        });
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to pick image");
+      if (error.message !== "User cancelled image selection") {
+        Alert.alert("Error", "Failed to pick image");
+      }
     }
   };
 
