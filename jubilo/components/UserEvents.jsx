@@ -1,6 +1,6 @@
 import EventCard from "@/components/events/EventCard";
 import { useTheme } from "@/hooks/theme";
-import { supabase } from "@/lib/supabase";
+import { getEvents } from "@/services/events";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { FlatList, StyleSheet } from "react-native";
@@ -17,96 +17,11 @@ export default function UserEvents({ userId }) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // If viewing own profile, get all events where user is participant or going
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const isOwnProfile = user?.id === userId;
-
-      // First get events where user is a participant
-      const { data: participantEvents, error: participantError } =
-        await supabase
-          .from("event_participants")
-          .select(
-            `
-          event:events(
-            *,
-            creator:profiles!creator_id(
-              id,
-              username,
-              first_name,
-              last_name,
-              image_url
-            ),
-            participants:event_participants(
-              id,
-              status,
-              user:profiles!user_id(
-                id,
-                username,
-                first_name,
-                last_name,
-                image_url
-              )
-            ),
-            followers:event_followers(count),
-            posts:event_posts(count),
-            questions:event_questions(count),
-            images:event_images(image_url)
-          )
-        `
-          )
-          .eq("user_id", userId)
-          .eq("status", "going");
-
-      if (participantError) throw participantError;
-
-      // If viewing own profile, also get events created by the user
-      let createdEvents = [];
-      if (isOwnProfile) {
-        const { data: creatorEvents, error: creatorError } = await supabase
-          .from("events")
-          .select(
-            `
-            *,
-            creator:profiles!creator_id(
-              id,
-              username,
-              first_name,
-              last_name,
-              image_url
-            ),
-            participants:event_participants(
-              id,
-              status,
-              user:profiles!user_id(
-                id,
-                username,
-                first_name,
-                last_name,
-                image_url
-              )
-            ),
-            followers:event_followers(count),
-            posts:event_posts(count),
-            questions:event_questions(count),
-            images:event_images(image_url)
-          `
-          )
-          .eq("creator_id", userId);
-
-        if (creatorError) throw creatorError;
-        createdEvents = creatorEvents || [];
-      }
-
-      // Combine and deduplicate events
-      const participantEventData = participantEvents?.map((p) => p.event) || [];
-      const allEvents = [...participantEventData, ...createdEvents];
-      const uniqueEvents = Array.from(
-        new Map(allEvents.map((e) => [e.id, e])).values()
-      );
-
-      setEvents(uniqueEvents);
+      const { events: fetchedEvents } = await getEvents({
+        userId,
+        limit: 50, // Adjust this number based on your needs
+      });
+      setEvents(fetchedEvents);
     } catch (error) {
       console.error("Error fetching events:", error);
     } finally {

@@ -55,9 +55,106 @@ export const getEvents = async ({
       query = query.eq("category", category);
     }
     if (userId) {
-      query = query.or(
-        `creator_id.eq.${userId},participants.user_id.eq.${userId}`
+      // Get events where user is creator
+      const { data: creatorEvents, error: creatorError } = await supabase
+        .from("events")
+        .select(
+          `
+          *,
+          creator:profiles!creator_id(
+            id,
+            username,
+            first_name,
+            last_name,
+            image_url
+          ),
+          participants:event_participants(
+            id,
+            status,
+            user:profiles!user_id(
+              id,
+              username,
+              first_name,
+              last_name,
+              image_url
+            )
+          ),
+          followers:event_followers(count),
+          posts:event_posts(count),
+          questions:event_questions(count),
+          images:event_images(
+            image_url,
+            is_primary
+          )
+        `
+        )
+        .eq("creator_id", userId);
+
+      if (creatorError) throw creatorError;
+
+      // Get events where user is participant
+      const { data: participantEvents, error: participantError } =
+        await supabase
+          .from("event_participants")
+          .select(
+            `
+          event:events(
+            *,
+            creator:profiles!creator_id(
+              id,
+              username,
+              first_name,
+              last_name,
+              image_url
+            ),
+            participants:event_participants(
+              id,
+              status,
+              user:profiles!user_id(
+                id,
+                username,
+                first_name,
+                last_name,
+                image_url
+              )
+            ),
+            followers:event_followers(count),
+            posts:event_posts(count),
+            questions:event_questions(count),
+            images:event_images(
+              image_url,
+              is_primary
+            )
+          )
+        `
+          )
+          .eq("user_id", userId)
+          .eq("status", "going");
+
+      if (participantError) throw participantError;
+
+      // Combine and deduplicate events
+      const participantEventData = participantEvents?.map((p) => p.event) || [];
+      const allEvents = [...(creatorEvents || []), ...participantEventData];
+
+      // Process events to set image_url from primary image
+      const processedEvents = allEvents.map((event) => ({
+        ...event,
+        image_url:
+          event.images?.find((img) => img.is_primary)?.image_url ||
+          event.images?.[0]?.image_url,
+      }));
+
+      const uniqueEvents = Array.from(
+        new Map(processedEvents.map((e) => [e.id, e])).values()
       );
+
+      return {
+        events: uniqueEvents,
+        total: uniqueEvents.length,
+        page,
+        limit,
+      };
     }
 
     // Pagination
